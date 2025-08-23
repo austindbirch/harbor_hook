@@ -1,0 +1,17 @@
+# Go
+bin/
+dist/
+*.test
+*.out
+*.coverprofile
+
+# Protobuf
+protogen/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Docker
+deploy/docker/postgres/data/

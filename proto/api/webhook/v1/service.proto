@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package api.webhook.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1;webhookv1";
+
+// Minimal service surface for Phase-0; implemented in Phase-1+.
+service WebhookService {
+  // Placeholder to verify gateway wiring in later phases.
+  rpc Ping(PingRequest) returns (PingResponse) {
+    option (google.api.http) = {
+      get: "/v1/ping"
+    };
+  }
+
+  // Phase-1+:
+  // rpc CreateEndpoint(CreateEndpointRequest) returns (CreateEndpointResponse) {}
+  // rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse) {}
+  // rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse) {}
+  // rpc GetDeliveryStatus(GetDeliveryStatusRequest) returns (GetDeliveryStatusResponse) {}
+  // rpc ReplayDelivery(ReplayDeliveryRequest) returns (ReplayDeliveryResponse) {}
+}
+
+message PingRequest {}
+message PingResponse {
+    string message = 1;
+}

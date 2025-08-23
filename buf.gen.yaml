@@ -1,0 +1,28 @@
+# go generates the protobuf definitions
+# go-grpc generates the gRPC service definitions
+# grpc-gateway generates the HTTP reverse proxy
+# openapi generates the OpenAPI definitions
+
+version: v1
+plugins:
+  - plugin: go
+    out: protogen/go
+    opt:
+      - paths=source_relative
+  - plugin: go-grpc
+    out: protogen/go
+    opt:
+      - paths=source_relative
+      - require_unimplemented_servers=false
+  - plugin: grpc-gateway
+    out: protogen/go
+    opt:
+      - paths=source_relative
+      - generate_unbound_methods=true
+  - plugin: openapi
+    out: protogen/openapi
+    opt:
+      - allow_merge=true
+      - merge_file_name=harborhook
+      - naming=proto
+      - enum_type=string
