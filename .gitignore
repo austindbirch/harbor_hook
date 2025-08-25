@@ -16,3 +16,4 @@ protogen/
 
 # Docker
 deploy/docker/postgres/data/
+deploy/docker/prometheus/data/
