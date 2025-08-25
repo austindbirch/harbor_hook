@@ -2,29 +2,162 @@ syntax = "proto3";
 
 package api.webhook.v1;
 
-import "google/protobuf/timestamp.proto";
+import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "openapi/openapiv3/annotations.proto";
 
 option go_package = "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1;webhookv1";
+option (openapi.v3.document) = {
+  openapi: "3.0.0"
+  info: {
+    title: "HarborHook"
+    description: "A Go-first multi-tenant webhook platform"
+    contact: {
+      name: "Austin Birch"
+      email: "austin@argus-entertainment.com"
+    }
+    version: "1.0.0"
+  }
+  tags: [
+    {
+      name: "Endpoints"
+      description: "Get data about webhook endpoints"
+    },
+    {
+      name: "Subscriptions"
+      description: "Get data about webhook subscriptions"
+    },
+    {
+      name: "Events"
+      description: "Get data about webhook events"
+    }
+  ]
+};
 
-// Minimal service surface for Phase-0; implemented in Phase-1+.
+// Main service definition. If you're viewing on Swagger/Redoc, this tag contains all paths available.
 service WebhookService {
   // Placeholder to verify gateway wiring in later phases.
   rpc Ping(PingRequest) returns (PingResponse) {
+    option (google.api.http) = {get: "/v1/ping"};
+  }
+
+  rpc CreateEndpoint(CreateEndpointRequest) returns (CreateEndpointResponse) {
     option (google.api.http) = {
-      get: "/v1/ping"
+      post: "/v1/tenants/{tenant_id}/endpoints"
+      body: "*"
+    };
+
+    option (openapi.v3.operation) = {
+      tags: ["Endpoints"]
+      description: "Register a new URL as a webhook endpoint"
     };
   }
 
-  // Phase-1+:
-  // rpc CreateEndpoint(CreateEndpointRequest) returns (CreateEndpointResponse) {}
-  // rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse) {}
-  // rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse) {}
-  // rpc GetDeliveryStatus(GetDeliveryStatusRequest) returns (GetDeliveryStatusResponse) {}
-  // rpc ReplayDelivery(ReplayDeliveryRequest) returns (ReplayDeliveryResponse) {}
+  rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse) {
+    option (google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/subscriptions"
+      body: "*"
+    };
+
+    option (openapi.v3.operation) = {
+      tags: ["Subscriptions"]
+      description: "Subscribe an endpoint to a specific event type"
+    };
+  }
+
+  rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse) {
+    option (google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/events:publish"
+      body: "*"
+    };
+
+    option (openapi.v3.operation) = {
+      tags: ["Events"]
+      description: "Publish a new webhook event"
+    };
+  }
 }
 
 message PingRequest {}
 message PingResponse {
-    string message = 1;
+  string message = 1;
+}
+
+// An endpoint is a URL that receives webhook events
+message Endpoint {
+  // Unique ID for the endpoint
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // ID for the tenant
+  string tenant_id = 2;
+  // Target URL that we will send events to
+  string url = 3 [(buf.validate.field).string.uri = true];
+  // Created at timestamp (must be after 2025-01-01 00:00:00 UTC)
+  google.protobuf.Timestamp created_at = 4 [(buf.validate.field).timestamp.gte = {seconds: 1735689600}];
+}
+
+// A subscription is a relationship between an endpoint and an event type
+message Subscription {
+  // Unique ID for the subscription
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  // ID for the tenant
+  string tenant_id = 2;
+  // Event type that this subscription is for
+  string event_type = 3;
+  // Endpoint ID that this subscription is a member of
+  string endpoint_id = 4 [(buf.validate.field).string.uuid = true];
+  // Created at timestamp (must be after 2025-01-01 00:00:00 UTC)
+  google.protobuf.Timestamp created_at = 5 [(buf.validate.field).timestamp.gte = {seconds: 1735689600}];
+}
+
+// Create endpoint request message
+message CreateEndpointRequest {
+  // ID for the tenant
+  string tenant_id = 1 [(buf.validate.field).required = true];
+  // Target URL that we will send events to, e.g. http://fake-receiver:8081/hook
+  string url = 2 [(buf.validate.field).string.uri = true];
+}
+
+// Create endpoint response message
+message CreateEndpointResponse {
+  // The newly created endpoint
+  Endpoint endpoint = 1;
+}
+
+// Create subscription request message
+message CreateSubscriptionRequest {
+  // Tenant ID for the subscription
+  string tenant_id = 1 [(buf.validate.field).required = true];
+  // Event type that this subscription is for
+  string event_type = 2 [(buf.validate.field).required = true];
+  // Endpoint ID that this subscription is a member of
+  string endpoint_id = 3 [
+    (buf.validate.field).string.uuid = true,
+    (buf.validate.field).required = true
+  ];
+}
+
+// Create subscription response message
+message CreateSubscriptionResponse {
+  // The newly created subscription
+  Subscription subscription = 1;
+}
+
+// Publish event request message
+message PublishEventRequest {
+  // ID for the tenant
+  string tenant_id = 1 [(buf.validate.field).required = true];
+  // Event type to be published
+  string event_type = 2 [(buf.validate.field).required = true];
+  // Payload data for the event (arbitrary JSON)
+  google.protobuf.Struct payload = 3 [(buf.validate.field).required = true];
+}
+
+// Publish event response message
+message PublishEventResponse {
+  // Event ID
+  string event_id = 1 [(buf.validate.field).string.uuid = true];
+  // How many deliveries for this event are enqueued
+  int32 fanout_count = 2 [(buf.validate.field).required = true];
 }

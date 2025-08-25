@@ -1,13 +1,14 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: ./postgres
     container_name: hh-postgres
+    restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - ./postgres/init:/docker-entrypoint.initdb.d
       - ./postgres/data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
@@ -104,10 +105,14 @@ services:
       - "8081:8081"
 
   prometheus:
-    image: prom/prometheus:latest
+    build:
+      context: ./prometheus
     container_name: hh-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--web.enable-lifecycle" # Enables hot-swap config reloading
     volumes:
-      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./prometheus/data:/prometheus
     ports:
       - "9090:9090"
 

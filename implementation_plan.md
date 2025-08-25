@@ -32,9 +32,9 @@
 	- Watch nsqadmin --> message flows, fake receiver logs, DB `deliveries.status=ok`
 	- Grafana shows counters increment
 - AC: 
-    - [ ] One publish --> one HTTP delivery to the subscribed endpoint
-    - [ ] DB reflects success
-    - [ ] Prometheus counters increment
+    - [x] One publish --> one HTTP delivery to the subscribed endpoint
+    - [x] DB reflects success
+    - [x] Prometheus counters increment
 ## Phase 2: Reliability Core
 - End Goal: make delivery safe and secure: no duplicate publishes, signed payloads, backoff on failures, DLQ when exhausted
 - What we add:

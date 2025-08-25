@@ -1,6 +1,7 @@
 version: v2
 modules:
-  - path: proto/third_party
+  - path: third_party
+  - path: proto
 deps:
   - buf.build/googleapis/googleapis
   - buf.build/grpc-ecosystem/grpc-gateway

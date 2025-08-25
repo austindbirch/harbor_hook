@@ -12,6 +12,7 @@ protogen/
 .vscode/
 .idea/
 .DS_Store
+.editorconfig
 
 # Docker
 deploy/docker/postgres/data/

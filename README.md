@@ -11,6 +11,10 @@ make build
 make up
 # wait ~5-10s
 make logs
+# Stop stack
+make down
+# Prune Docker
+make clean
 ```
 
 ## Smoke checks
