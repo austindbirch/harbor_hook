@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-COMPOSE := docker compose -f deploy/docker-compose.yaml --env-file deploy/docker/.env
+COMPOSE := docker compose -f deploy/docker/docker-compose.yaml --env-file deploy/docker/.env
 
 .PHONY: proto build lint up down logs clean tidy
 

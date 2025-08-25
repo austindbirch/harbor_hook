@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hh-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./postgres/init:/docker-entrypoint.initdb.d
+      - ./postgres/data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nsqlookupd:
+    image: nsqio/nsq:latest
+    container_name: hh-nsqlookupd
+    command: /nsqlookupd
+    ports:
+      - "4160:4160"
+      - "4161:4161"
+
+  nsqd:
+    image: nsqio/nsq:latest
+    container_name: hh-nsqd
+    command: >
+      /nsqd
+      --lookupd-tcp-address=nsqlookupd:4160
+      --broadcast-address=nsqd
+      --max-msg-timeout=15m
+    depends_on:
+      - nsqlookupd
+    ports:
+      - "4150:4150"
+      - "4151:4151"
+
+  nsqadmin:
+    image: nsqio/nsq:latest
+    container_name: hh-nsqadmin
+    command: >
+      /nsqadmin --lookupd-http-address=nsqlookupd:4161
+    depends_on:
+      - nsqlookupd
+    ports:
+      - "4171:4171"
+
+  ingest:
+    build:
+      context: ../../
+      dockerfile: cmd/ingest/Dockerfile
+    container_name: hh-ingest
+    environment:
+      APP_NAME: ingest
+      HTTP_PORT: ":${INGEST_HTTP_PORT}"
+      GRPC_PORT: ":${INGEST_GRPC_PORT}"
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      NSQD_TCP_ADDR: ${NSQD_TCP_ADDR}
+      NSQLOOKUPD_HTTP_ADDR: ${NSQLOOKUPD_HTTP_ADDR}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nsqd:
+        condition: service_started
+    ports:
+      - "${INGEST_HTTP_PORT}:${INGEST_HTTP_PORT}"
+      - "${INGEST_GRPC_PORT}:${INGEST_GRPC_PORT}"
+
+  worker:
+    build: 
+      context: ../../
+      dockerfile: cmd/worker/Dockerfile
+    container_name: hh-worker
+    environment:
+      APP_NAME: worker
+      HTTP_PORT: ":${WORKER_HTTP_PORT}"
+      GRPC_PORT: ":50052"
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      NSQD_TCP_ADDR: ${NSQD_TCP_ADDR}
+      NSQLOOKUPD_HTTP_ADDR: ${NSQLOOKUPD_HTTP_ADDR}
+    depends_on:
+      - nsqd
+    ports:
+      - "${WORKER_HTTP_PORT}:${WORKER_HTTP_PORT}"
+
+  fake-receiver:
+    build:
+      context: ../../
+      dockerfile: cmd/fake-receiver/Dockerfile
+    container_name: hh-fake-receiver
+    ports:
+      - "8081:8081"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: hh-prometheus
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: hh-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD}
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"

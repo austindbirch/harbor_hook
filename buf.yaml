@@ -1,11 +1,22 @@
-version: v1
-name: buf.build/austindbirch/harborhook
+version: v2
+modules:
+  - path: proto/third_party
 deps:
   - buf.build/googleapis/googleapis
   - buf.build/grpc-ecosystem/grpc-gateway
 lint:
   use:
     - DEFAULT
+  except:
+    - ENUM_FIRST_VALUE_ZERO
+    - ENUM_NO_ALLOW_ALIAS
+    - FIELD_NOT_REQUIRED
+    - IMPORT_NO_PUBLIC
+    - IMPORT_USED
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_NO_IMPORT_CYCLE
+    - PACKAGE_SAME_DIRECTORY
+    - SYNTAX_SPECIFIED
 breaking:
   use:
     - FILE

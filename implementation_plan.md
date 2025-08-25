@@ -13,11 +13,11 @@
     - Open nsqadmin and Grafana (empty dashboards for now)
     - curl /healthz and grpc_health_probe
 - AC: 
-    - [ ] Protos compile
-    - [ ] Gateway runs
-    - [ ] DB migrates
-    - [ ] Containers start cleanly
-    - [ ] Health checks pass
+    - [x] Protos compile
+    - [x] Gateway runs
+    - [x] DB migrates
+    - [x] Containers start cleanly
+    - [x] Health checks pass
 ## Phase 1: Hello Delivery e2e
 - End Goal: First vertical slice. Create endpoint and subscription, publish an event, worker delivers to fake receiver, status recorded as ok
 - What we add:
