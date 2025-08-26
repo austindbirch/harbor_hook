@@ -117,6 +117,8 @@ message CreateEndpointRequest {
   string tenant_id = 1 [(buf.validate.field).required = true];
   // Target URL that we will send events to, e.g. http://fake-receiver:8081/hook
   string url = 2 [(buf.validate.field).string.uri = true];
+  // Optional secret. If empty, server generates a secret for you
+  string secret = 3;
 }
 
 // Create endpoint response message
@@ -152,6 +154,8 @@ message PublishEventRequest {
   string event_type = 2 [(buf.validate.field).required = true];
   // Payload data for the event (arbitrary JSON)
   google.protobuf.Struct payload = 3 [(buf.validate.field).required = true];
+  // Required for deduplication, if empty, no dedup
+  string idempotency_key = 4;
 }
 
 // Publish event response message

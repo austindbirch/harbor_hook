@@ -2,6 +2,8 @@ package ingest
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +38,15 @@ func (s *Server) Ping(ctx context.Context, _ *webhookv1.PingRequest) (*webhookv1
 	return &webhookv1.PingResponse{Message: "pong"}, nil
 }
 
+// generateSecret generates a random base64-encoded string of length n
+func generateSecret(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
 // CreateEndpoint creates a new webhook endpoint
 func (s *Server) CreateEndpoint(ctx context.Context, req *webhookv1.CreateEndpointRequest) (*webhookv1.CreateEndpointResponse, error) {
 	// Ensure required fields are present
@@ -46,15 +57,26 @@ func (s *Server) CreateEndpoint(ctx context.Context, req *webhookv1.CreateEndpoi
 		return nil, fmt.Errorf("invalid url: %w", err)
 	}
 
+	// Check for secret; if not present, generate one
+	secret := req.GetSecret()
+	if secret == "" {
+		var err error
+		secret, err = generateSecret(32) // 256-bit
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Insert into database
 	var id string
 	var createdAt time.Time
 	// This is some funky formatting, but it makes sense given the db query
+	// In a real system, we'd NEVER return the secret after creation
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO harborhook.endpoints(tenant_id, url)
-		VALUES ($1, $2)
+		INSERT INTO harborhook.endpoints(tenant_id, url, secret)
+		VALUES ($1, $2, $3)
 		RETURNING id, created_at`,
-		req.GetTenantId(), req.GetUrl(),
+		req.GetTenantId(), req.GetUrl(), secret,
 	).Scan(&id, &createdAt)
 	if err != nil {
 		return nil, err
@@ -126,13 +148,49 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 
 	// Insert event
 	var eventID string
-	if err := s.pool.QueryRow(ctx, `
-		INSERT INTO harborhook.events(tenant_id, event_type, payload)
-		VALUES ($1, $2, $3)
-		RETURNING id`,
-		req.GetTenantId(), req.GetEventType(), req.GetPayload().AsMap(),
-	).Scan(&eventID); err != nil {
-		return nil, err
+	var fanout int32
+	payloadMap := req.GetPayload().AsMap()
+
+	// Try insert; if conflict on idempotency, fetch existing id and DO NOT fanout
+	if req.GetIdempotencyKey() != "" {
+		err := s.pool.QueryRow(ctx, `
+			INSERT INTO harborhook.events(tenant_id, event_type, payload, idempotency_key)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (tenant_id, idempotency_key) DO UPDATE SET event_type = EXCLUDED.event_type,
+			RETURNING id`,
+			req.GetTenantId(), req.GetEventType(), payloadMap, req.GetIdempotencyKey(),
+		).Scan(&eventID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if this was an existing row (no trivial way from INSERT ... DO UPDATE),
+		// so gate fanout on whether this was the first time we saw this (by checking deliveries count)
+		var existingCount int
+		if err := s.pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM harborhook.deliveries
+			WHERE event_id = $1`,
+			eventID,
+		).Scan(&existingCount); err != nil {
+			return nil, err
+		}
+		if existingCount > 0 {
+			// Idempotent re-publish: return 200 with fanout = 0
+			return &webhookv1.PublishEventResponse{
+				EventId:     eventID,
+				FanoutCount: 0,
+			}, nil
+		}
+	} else {
+		// No idempotency key, always create a new event
+		if err := s.pool.QueryRow(ctx, `
+			INSERT INTO harborhook.events(tenant_id, event_type, payload)
+			VALUES ($1, $2, $3)
+			RETURNING id`,
+			req.GetTenantId(), req.GetEventType(), payloadMap,
+		).Scan(&eventID); err != nil {
+			return nil, err
+		}
 	}
 
 	// Fetch subscribers + insert deliveries (pending), then enqueue
@@ -151,9 +209,6 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 		return nil, err
 	}
 	defer rows.Close()
-
-	var fanout int32
-	payloadMap := req.GetPayload().AsMap()
 
 	batch := &pgx.Batch{}
 	var targets []subRow

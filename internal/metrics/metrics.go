@@ -17,8 +17,23 @@ var (
 		},
 		[]string{"status"},
 	)
+
+	RetriesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "harborhook_retries_total",
+			Help: "Total number of delivery retries by reason.",
+		},
+		[]string{"reason"}, // e.g. http_5xx, timeout, network, other
+	)
+
+	DLQTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "harborhook_dlq_total",
+			Help: "Total number of deliveries moved to DLQ.",
+		},
+	)
 )
 
 func MustRegister(reg *prometheus.Registry) {
-	reg.MustRegister(EventsPublishedTotal, DeliveriesTotal)
+	reg.MustRegister(EventsPublishedTotal, DeliveriesTotal, RetriesTotal, DLQTotal)
 }

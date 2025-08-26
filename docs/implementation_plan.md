@@ -1,5 +1,6 @@
 # Implementation Plan
 
+---
 ## Phase 0: Scaffold and Health
 - End Goal: A runnable repo with generated protobufs, a bare Ingest service, Postgres connectivity, and NSQ stack up in Docker (plus a fake receiver service)
 - What we add:
@@ -18,6 +19,8 @@
     - [x] DB migrates
     - [x] Containers start cleanly
     - [x] Health checks pass
+
+---
 ## Phase 1: Hello Delivery e2e
 - End Goal: First vertical slice. Create endpoint and subscription, publish an event, worker delivers to fake receiver, status recorded as ok
 - What we add:
@@ -35,6 +38,8 @@
     - [x] One publish --> one HTTP delivery to the subscribed endpoint
     - [x] DB reflects success
     - [x] Prometheus counters increment
+
+---
 ## Phase 2: Reliability Core
 - End Goal: make delivery safe and secure: no duplicate publishes, signed payloads, backoff on failures, DLQ when exhausted
 - What we add:
@@ -52,6 +57,8 @@
     - [ ] retries obey backoff/jitter
     - [ ] DLQ when exceeded
     - [ ] Signatures present and receiver can verify
+
+---
 ## Phase 3: Replay and Status APIs
 - End Goal: Operators can inspect and replay failed deliveries, devs can query delivery history.
 - What we add:
@@ -66,6 +73,8 @@
 - AC: 
     - [ ] Replay re-enqueues exactly one new delivery task
     - [ ] Status API returns accurate attempt timeline
+
+---
 ## Phase 4: Gateway and Security
 - End Goal: Production-grade edge: Envoy API gateway with JWT auth, TLS termination, body size limits, mTLS for internal gRPC
 - What we add:
@@ -80,6 +89,8 @@
 - AC: 
     - [ ] Unauthed requests = blocked, authed = pass
     - [ ] TLS/mTLS enforced, limits applied
+
+---
 ## Phase 5: Observability Stack
 - End Goal: Full-stack observability that tells a complete story: metrics, logs, traces, and SLO-based alerts
 - What we add:
@@ -102,6 +113,8 @@
     - [ ] Dashboards load from repo JSON
     - [ ] Traces show all spans
     - [ ] Alerts evaluate without errors
+
+---
 ## Phase 6: Flow Control and Protection
 - End Goal: Protect the system and receivers with fine-grained flow control
 - What we add:
@@ -116,6 +129,8 @@
 - AC: 
     - [ ] System maintains throughput without runaway retries
     - [ ] Misbehaving endpoints are isolated, healthy tenants continue to meet SLO
+
+---
 ## Phase 7: K8s and CI/CD
 - End Goal: One-command cluster bring-up with Helm, automated e2e in CLI
 - What we add:
@@ -133,6 +148,8 @@
     - [ ] Green e2e
     - [ ] Zero manual post-steps
     - [ ] CI artifacts (k8s test logs, screenshots)
+
+---
 ## Phase 8: Runbooks and Documentation
 - End Goal: Show that this can be run like a platform: safe deploys, crisp runbooks
 - What we add:
@@ -142,6 +159,8 @@
     - Go through quickstart process in a new env
 - AC:
     - [ ] Runbooks are actionable
+
+---
 ## Phase 9: Analytics API Stretch Goal
 - End Goal: Add an analytics API that allows users to query metrics on a per-tenant basis
 - What we add:
