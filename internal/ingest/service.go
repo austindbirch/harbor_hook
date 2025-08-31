@@ -150,46 +150,61 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 	var eventID string
 	var fanout int32
 	payloadMap := req.GetPayload().AsMap()
+	// Marshal once, pass as TEXT and cast to ::jsonb in SQL (avoids some driver type ambiguity issues)
+	payloadJSON, err := json.Marshal(payloadMap)
+	if err != nil {
+		return nil, fmt.Errorf("invalid payload: %w", err)
+	}
 
 	// Try insert; if conflict on idempotency, fetch existing id and DO NOT fanout
 	if req.GetIdempotencyKey() != "" {
-		err := s.pool.QueryRow(ctx, `
+		// 1) Insert-or-ignore (no RETURNING here)
+		ct, err := s.pool.Exec(ctx, `
 			INSERT INTO harborhook.events(tenant_id, event_type, payload, idempotency_key)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (tenant_id, idempotency_key) DO UPDATE SET event_type = EXCLUDED.event_type,
-			RETURNING id`,
-			req.GetTenantId(), req.GetEventType(), payloadMap, req.GetIdempotencyKey(),
-		).Scan(&eventID)
+			VALUES ($1, $2, $3::jsonb, $4)
+			ON CONFLICT ON CONSTRAINT uq_events_tenant_idem DO NOTHING`,
+			req.GetTenantId(), req.GetEventType(), string(payloadJSON), req.GetIdempotencyKey(),
+		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("insert events (idempotent): %w", err)
 		}
 
-		// Check if this was an existing row (no trivial way from INSERT ... DO UPDATE),
-		// so gate fanout on whether this was the first time we saw this (by checking deliveries count)
-		var existingCount int
+		// 2) Fetch the event id whether inserted now or already existed
 		if err := s.pool.QueryRow(ctx, `
-			SELECT COUNT(*) FROM harborhook.deliveries
-			WHERE event_id = $1`,
-			eventID,
-		).Scan(&existingCount); err != nil {
-			return nil, err
+			SELECT id FROM harborhook.events
+		 	WHERE tenant_id = $1 AND idempotency_key = $2
+		 	LIMIT 1`,
+			req.GetTenantId(), req.GetIdempotencyKey(),
+		).Scan(&eventID); err != nil {
+			return nil, fmt.Errorf("select event id (idempotent): %w", err)
 		}
-		if existingCount > 0 {
-			// Idempotent re-publish: return 200 with fanout = 0
-			return &webhookv1.PublishEventResponse{
-				EventId:     eventID,
-				FanoutCount: 0,
-			}, nil
+
+		// 3) If we did NOT insert now (rows affected == 0), check if deliveries already exist.
+		//    If they do, treat as duplicate publish → no fanout.
+		if ct.RowsAffected() == 0 {
+			var existingCount int
+			if err := s.pool.QueryRow(ctx, `
+				SELECT COUNT(*) FROM harborhook.deliveries WHERE event_id = $1`,
+				eventID,
+			).Scan(&existingCount); err != nil {
+				return nil, fmt.Errorf("count existing deliveries: %w", err)
+			}
+			if existingCount > 0 {
+				return &webhookv1.PublishEventResponse{
+					EventId:     eventID,
+					FanoutCount: 0,
+				}, nil
+			}
 		}
 	} else {
-		// No idempotency key, always create a new event
+		// No idempotency key → always create a new event
 		if err := s.pool.QueryRow(ctx, `
 			INSERT INTO harborhook.events(tenant_id, event_type, payload)
-			VALUES ($1, $2, $3)
+			VALUES ($1, $2, $3::jsonb)
 			RETURNING id`,
-			req.GetTenantId(), req.GetEventType(), payloadMap,
+			req.GetTenantId(), req.GetEventType(), string(payloadJSON),
 		).Scan(&eventID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("insert events (no-idem): %w", err)
 		}
 	}
 
@@ -222,7 +237,8 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 		batch.Queue(`
 			INSERT INTO harborhook.deliveries(event_id, endpoint_id, status)
 			VALUES ($1, $2, 'pending')
-			RETURNING id`, eventID, r.EndpointID)
+			RETURNING id`,
+			eventID, r.EndpointID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

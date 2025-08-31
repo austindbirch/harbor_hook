@@ -105,6 +105,10 @@ services:
       context: ../../
       dockerfile: cmd/fake-receiver/Dockerfile
     container_name: hh-fake-receiver
+    environment:
+      FAIL_FIRST: ${FAIL_FIRST}
+      ENDPOINT_SECRET: ${ENDPOINT_SECRET}
+      SIGNING_LEEWAY_SECONDS: ${SIGNING_LEEWAY_SECONDS}
     ports:
       - "8081:8081"
 

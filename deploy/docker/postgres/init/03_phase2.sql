@@ -4,9 +4,9 @@
 ALTER TABLE harborhook.events
     ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_events_tenant_idem
-    ON harborhook.events(tenant_id, idempotency_key)
-    WHERE idempotency_key IS NOT NULL;
+-- Postgres UNIQUE allows multiple NULLs, so we don't need a partial index
+ALTER TABLE harborhook.events
+  ADD CONSTRAINT uq_events_tenant_idem UNIQUE (tenant_id, idempotency_key);
 
 -- 2. DLQ table
 CREATE TABLE IF NOT EXISTS harborhook.dlq (

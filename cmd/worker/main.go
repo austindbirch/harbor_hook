@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -82,7 +83,7 @@ func readRetryCfg() retryCfg {
 	}
 }
 
-// Helper func to parse int env vars, default to def
+// Helper func to parse int env vars, fallback to default
 func parseEnvInt(k string, def int) int {
 	if v := os.Getenv(k); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
@@ -92,7 +93,7 @@ func parseEnvInt(k string, def int) int {
 	return def
 }
 
-// Helper func to parse float env vars, default to def
+// Helper func to parse float env vars, fallback to default
 func parseEnvFloat(k string, def float64) float64 {
 	if v := os.Getenv(k); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
@@ -155,30 +156,40 @@ func main() {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 
 	consumer.AddHandler(nsq.HandlerFunc(func(m *nsq.Message) error {
+		m.DisableAutoResponse() // we manually requeue or finish
+		defer func() {
+			if !m.HasResponded() {
+				log.Printf("WARN: message had no response, finishing")
+				m.Finish()
+			}
+		}()
+
 		var t delivery.Task
 		if err := json.Unmarshal(m.Body, &t); err != nil {
 			log.Printf("bad task: %v", err)
 			metrics.DeliveriesTotal.WithLabelValues("failed").Inc()
+			m.Finish() // terminal: don't retry bad payloads
 			return nil
 		}
 
 		// Fetch endpoint secret for signing
-		var secret string
-		err := pool.QueryRow(ctx, `
-			SELECT secret 
-			FROM harborhook.endpoints 
-			WHERE id=$1`,
-			t.EndpointID).Scan(&secret)
-		if err != nil || secret == "" {
+		var secret sql.NullString
+		if err := pool.QueryRow(ctx, `SELECT secret FROM harborhook.endpoints WHERE id=$1`,
+			t.EndpointID).Scan(&secret); err != nil || !secret.Valid || secret.String == "" {
+			_, _ = pool.Exec(ctx, `
+				UPDATE harborhook.deliveries 
+				SET status='failed', attempt=attempt+1, updated_at=now(), last_error='endpoint_secret_missing' 
+				WHERE id=$1`, t.DeliveryID)
 			log.Printf("No secret for endpoint %s: %v", t.EndpointID, err)
 			metrics.DeliveriesTotal.WithLabelValues("failed").Inc()
+			m.Finish() // terminal: can't sign without secret
 			return nil
 		}
 
 		// Build request (sign: HMAC over body||timestamp)
 		body, _ := json.Marshal(t.Payload)
 		ts := strconv.FormatInt(time.Now().Unix(), 10)
-		mac := hmac.New(sha256.New, []byte(secret))
+		mac := hmac.New(sha256.New, []byte(secret.String))
 		mac.Write(body)
 		mac.Write([]byte(ts))
 		sig := hex.EncodeToString(mac.Sum(nil))
@@ -199,7 +210,7 @@ func main() {
 
 		ok := (doErr == nil && status >= 200 && status < 300)
 		if ok {
-			// success: attempt = attempt+1, status=ok
+			// success: attempt+=, status=ok
 			_, updErr := pool.Exec(ctx, `
 				UPDATE harborhook.deliveries
 				SET status='ok', attempt=attempt+1, http_status=$1, latency_ms=$2, updated_at=now(), last_error=NULL
@@ -210,6 +221,7 @@ func main() {
 				log.Printf("db update success %s: %v", t.DeliveryID, updErr)
 			}
 			metrics.DeliveriesTotal.WithLabelValues("ok").Inc()
+			m.Finish() // explicit ack
 			return nil
 		}
 
@@ -244,17 +256,27 @@ func main() {
 			if qErr != nil {
 				log.Printf("dlq insert %s: %v", t.DeliveryID, qErr)
 			}
-			metrics.DLQTotal.Inc()
 
+			// DLQ (topic publish)
 			if retry.publishDLQ && dlqProducer != nil {
-				_ = dlqProducer.Publish(dlqTopic, m.Body) // best-effort
+				env := delivery.NewDeadLetter(t, newAttempt, status, errString(doErr), fmt.Sprintf("max attempts reached (%d)", newAttempt))
+				b, _ := json.Marshal(env)
+				if err := dlqProducer.Publish(dlqTopic, b); err != nil {
+					log.Printf("dlq publish %s: %v", t.DeliveryID, err)
+				} else {
+					log.Printf("dlq published %s to topic %q", t.DeliveryID, dlqTopic)
+				}
 			}
-			return nil // drop message; it's in DLQ now
+
+			metrics.DLQTotal.Inc()
+			m.Finish() // drop from main topic
+			return nil
 		}
 
 		// compute backoff with jitter and requeue
 		delay := computeDelay(newAttempt, retry.backoff, retry.jitterPct)
-		m.Requeue(delay)
+		log.Printf("requeue delivery=%s attempt=%d delay=%s", t.DeliveryID, newAttempt, delay)
+		m.Requeue(delay) // explicit requeue with delay
 		return nil
 	}))
 

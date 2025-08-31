@@ -17,6 +17,11 @@ make down
 make clean
 ```
 
+## TODO
+- [ ] Should this be implemented as a SaaS product, where we have a UI and API access deployed? Or should this live as a bundled package that a dev could theoretically download and use as a pre-baked webhook service?
+- [ ] I'm using docker desktop right now, but other work projects use Rancher. Can I swap docker desktop for rancher?
+- [ ] Regardless of whether this is SaaS or a dev package, I need to add a way for users/devs to generate, store, and inject secrets (for event signing)
+
 ## Smoke checks
 ```bash
 curl -s localhost:8080/healthz | jq .

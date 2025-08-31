@@ -53,9 +53,9 @@
     - Publish event, observe retries with increasing delays, final success marked
     - Force `max_attempts = 2` --> message lands in DLQ, visible in DB (and `deliveries_dlq` topic if I add that)
 - AC: 
-    - [ ] Duplicate publish with same (tenant_id, idempotency_key) returns 200 but creates no new event
-    - [ ] retries obey backoff/jitter
-    - [ ] DLQ when exceeded
+    - [x] Duplicate publish with same (tenant_id, idempotency_key) returns 200 but creates no new event
+    - [x] retries obey backoff/jitter
+    - [x] DLQ when exceeded
     - [ ] Signatures present and receiver can verify
 
 ---
