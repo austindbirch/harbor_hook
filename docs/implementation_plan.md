@@ -56,7 +56,7 @@
     - [x] Duplicate publish with same (tenant_id, idempotency_key) returns 200 but creates no new event
     - [x] retries obey backoff/jitter
     - [x] DLQ when exceeded
-    - [ ] Signatures present and receiver can verify
+    - [x] Signatures present and receiver can verify
 
 ---
 ## Phase 3: Replay and Status APIs

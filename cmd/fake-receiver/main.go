@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -21,7 +23,7 @@ const (
 
 var (
 	failFirstN     = 0
-	reqCount       = 0
+	reqCount       = atomic.Int64{}
 	endpointSecret = ""
 	maxSkew        = 5 * time.Minute
 )
@@ -54,7 +56,7 @@ func main() {
 }
 
 func handleHook(w http.ResponseWriter, r *http.Request) {
-	reqCount++
+	n := reqCount.Add(1)
 	b, _ := io.ReadAll(r.Body)
 	defer r.Body.Close()
 
@@ -67,8 +69,8 @@ func handleHook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Simulate flakiness: first N request -> 500
-	if reqCount <= failFirstN {
-		log.Printf("FAILING (%d/%d) %s headers=%d body=%s", reqCount, failFirstN, r.URL.Path, len(r.Header), truncate(string(b), 160))
+	if n <= int64(failFirstN) {
+		log.Printf("FAILING (%d/%d) %s headers=%d body=%s", n, failFirstN, r.URL.Path, len(r.Header), truncate(string(b), 160))
 		http.Error(w, "temporary failure", http.StatusInternalServerError)
 		return
 	}
@@ -87,16 +89,28 @@ func verifySignature(secret string, body []byte, ts, sigHeaderVal string, leeway
 		return false, "invalid timestamp"
 	}
 	// reject if timestamp is too old/new
-	now := time.Now().Unix()
-	if abs64(now-unix) > int64(leeway.Seconds()) {
-		return false, "timestamp too far from now (outside leeway)"
+	if abs64(time.Now().Unix()-unix) > int64(leeway.Seconds()) {
+		return false, "timestamp outside leeway"
 	}
-	got := strings.TrimPrefix(sigHeaderVal, "sha256=")
-	max := hmac.New(sha256.New, []byte(secret))
-	max.Write(body)
-	max.Write([]byte(ts))
-	want := hex.EncodeToString(max.Sum(nil))
-	if !hmac.Equal([]byte(got), []byte(want)) {
+
+	// expect "sha256=<hex>"
+	parts := strings.SplitN(sigHeaderVal, "=", 2)
+	if len(parts) != 2 || parts[0] != "sha256" {
+		return false, "bad signature scheme"
+	}
+	gotSig, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return false, "signature not hex"
+	}
+
+	// Compute HMAC
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	mac.Write([]byte(ts))
+	want := mac.Sum(nil)
+
+	// Check got against want
+	if len(gotSig) != len(want) || subtle.ConstantTimeCompare(gotSig, want) != 1 {
 		return false, "sig mismatch"
 	}
 	return true, ""
