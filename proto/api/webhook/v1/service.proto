@@ -165,3 +165,48 @@ message PublishEventResponse {
   // How many deliveries for this event are enqueued
   int32 fanout_count = 2 [(buf.validate.field).required = true];
 }
+
+message DeliveryAttempt {
+  // Unique ID for the delivery attempt
+  string delivery_id  = 1 [(buf.validate.field).string.uuid = true];
+  // ID of the event being delivered
+  string event_id     = 2 [(buf.validate.field).string.uuid = true];
+  // ID of the endpoint being delivered to
+  string endpoint_id  = 3 [(buf.validate.field).string.uuid = true];
+  // link to source attempt (if replayed)
+  string replay_of    = 4 [(buf.validate.field).string.uuid = true];
+  // queued|inflight|delivered|failed|dead
+  string status       = 5; 
+  // HTTP status code
+  int32 http_status   = 6;
+  // Optional error reason
+  string error_reason = 7;
+
+  // Timestamp of when the delivery was enqueued
+  google.protobuf.Timestamp enqueued_at  = 10 [(buf.validate.field).timestamp = {}];
+  // Timestamp of when the delivery was dequeued
+  google.protobuf.Timestamp dequeued_at  = 11 [(buf.validate.field).timestamp = {}];
+  // Timestamp of when the delivery was sent
+  google.protobuf.Timestamp sent_at      = 12 [(buf.validate.field).timestamp = {}];
+  // Timestamp of when the delivery was delivered
+  google.protobuf.Timestamp delivered_at = 13 [(buf.validate.field).timestamp = {}];
+  // Timestamp of when the delivery failed
+  google.protobuf.Timestamp failed_at    = 14 [(buf.validate.field).timestamp = {}];
+  // Timestamp of when the delivery was dead-lettered
+  google.protobuf.Timestamp dlq_at       = 15 [(buf.validate.field).timestamp = {}];
+}
+
+enum DeliveryAttemptStatus {
+  // Delivery attempt is unspecified (default, don't use)
+  DELIVERY_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  // Delivery attempt is queued
+  DELIVERY_ATTEMPT_STATUS_QUEUED = 1;
+  // Delivery attempt is in flight
+  DELIVERY_ATTEMPT_STATUS_IN_FLIGHT = 2;
+  // Delivery attempt was successful
+  DELIVERY_ATTEMPT_STATUS_DELIVERED = 3;
+  // Delivery attempt failed
+  DELIVERY_ATTEMPT_STATUS_FAILED = 4;
+  // Delivery attempt was dead-lettered
+  DELIVERY_ATTEMPT_STATUS_DEAD_LETTERED = 5;
+}

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS harborhook.events (
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'delivery_status') THEN
-        CREATE TYPE delivery_status AS ENUM ('pending', 'ok', 'failed');
+        CREATE TYPE delivery_status AS ENUM ('queued', 'inflight', 'delivered', 'failed', 'dead');
     END IF;
 END$$;
 
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS harborhook.deliveries (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id    UUID NOT NULL REFERENCES harborhook.events(id) ON DELETE CASCADE,
     endpoint_id UUID NOT NULL REFERENCES harborhook.endpoints(id) ON DELETE CASCADE,
-    status      delivery_status NOT NULL DEFAULT 'pending',
+    status      delivery_status NOT NULL DEFAULT 'queued',
     attempt     INT NOT NULL DEFAULT 0,
     http_status INT,
     latency_ms  INT,
