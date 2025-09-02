@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -233,10 +234,10 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 			return nil, err
 		}
 		targets = append(targets, r)
-		// Create pending delivery
+		// Create queued delivery
 		batch.Queue(`
 			INSERT INTO harborhook.deliveries(event_id, endpoint_id, status)
-			VALUES ($1, $2, 'pending')
+			VALUES ($1, $2, 'queued')
 			RETURNING id`,
 			eventID, r.EndpointID)
 	}
@@ -278,4 +279,241 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 		EventId:     eventID,
 		FanoutCount: fanout,
 	}, nil
+}
+
+// GetDeliveryStatus returns delivery attempts for a given event, with optional filters
+func (s *Server) GetDeliveryStatus(ctx context.Context, req *webhookv1.GetDeliveryStatusRequest) (*webhookv1.GetDeliveryStatusResponse, error) {
+    if req.GetEventId() == "" {
+        return nil, errors.New("event_id is required")
+    }
+
+    // Build dynamic WHERE clause
+    args := []any{req.GetEventId()}
+    where := "d.event_id = $1"
+    argn := 1
+    if eid := req.GetEndpointId(); eid != "" {
+        argn++
+        where += fmt.Sprintf(" AND d.endpoint_id = $%d", argn)
+        args = append(args, eid)
+    }
+    if from := req.GetFrom(); from != nil && from.Seconds != 0 {
+        argn++
+        where += fmt.Sprintf(" AND d.enqueued_at >= $%d", argn)
+        args = append(args, from.AsTime())
+    }
+    if to := req.GetTo(); to != nil && to.Seconds != 0 {
+        argn++
+        where += fmt.Sprintf(" AND d.enqueued_at <= $%d", argn)
+        args = append(args, to.AsTime())
+    }
+    limit := int32(10)
+    if req.GetLimit() > 0 {
+        limit = req.GetLimit()
+    }
+    argn++
+    args = append(args, limit)
+
+    q := fmt.Sprintf(`
+        SELECT d.id, d.event_id, d.endpoint_id, d.replay_of, d.status, d.http_status,
+               COALESCE(d.error_reason, d.last_error) AS err,
+               d.enqueued_at, d.dequeued_at, d.sent_at, d.delivered_at, d.failed_at, d.dlq_at
+        FROM harborhook.deliveries d
+        WHERE %s
+        ORDER BY d.enqueued_at ASC
+        LIMIT $%d`, where, argn)
+
+    rows, err := s.pool.Query(ctx, q, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var out []*webhookv1.DeliveryAttempt
+    for rows.Next() {
+        var (
+            id, eventID, endpointID string
+            replayOf sql.NullString
+            statusStr sql.NullString
+            httpStatus sql.NullInt32
+            errReason sql.NullString
+            enq, deq, sent, deliv, fail, dlq sql.NullTime
+        )
+        if err := rows.Scan(&id, &eventID, &endpointID, &replayOf, &statusStr, &httpStatus, &errReason,
+            &enq, &deq, &sent, &deliv, &fail, &dlq,
+        ); err != nil {
+            return nil, err
+        }
+        out = append(out, &webhookv1.DeliveryAttempt{
+            DeliveryId:  id,
+            EventId:     eventID,
+            EndpointId:  endpointID,
+            ReplayOf:    nullStr(replayOf),
+            Status:      mapStatus(nullStr(statusStr)),
+            HttpStatus:  nullI32(httpStatus),
+            ErrorReason: nullStr(errReason),
+            EnqueuedAt:  toTS(enq),
+            DequeuedAt:  toTS(deq),
+            SentAt:      toTS(sent),
+            DeliveredAt: toTS(deliv),
+            FailedAt:    toTS(fail),
+            DlqAt:       toTS(dlq),
+        })
+    }
+    if err := rows.Err(); err != nil {
+        return nil, err
+    }
+    return &webhookv1.GetDeliveryStatusResponse{Attempts: out}, nil
+}
+
+// ReplayDelivery enqueues a new delivery referencing a previous attempt
+func (s *Server) ReplayDelivery(ctx context.Context, req *webhookv1.ReplayDeliveryRequest) (*webhookv1.ReplayDeliveryResponse, error) {
+    if req.GetDeliveryId() == "" {
+        return nil, errors.New("delivery_id is required")
+    }
+
+    // Fetch source delivery + event/endpoint details
+    var (
+        eventID, endpointID, tenantID, eventType, endpointURL string
+        payloadJSON string
+    )
+    err := s.pool.QueryRow(ctx, `
+        SELECT d.event_id, d.endpoint_id, ev.tenant_id, ev.event_type, ev.payload::text, ep.url
+        FROM harborhook.deliveries d
+        JOIN harborhook.events ev ON ev.id = d.event_id
+        JOIN harborhook.endpoints ep ON ep.id = d.endpoint_id
+        WHERE d.id = $1
+    `, req.GetDeliveryId()).Scan(&eventID, &endpointID, &tenantID, &eventType, &payloadJSON, &endpointURL)
+    if err != nil {
+        return nil, fmt.Errorf("source delivery not found: %w", err)
+    }
+
+    // Insert new delivery referencing replay_of
+    var newID string
+    err = s.pool.QueryRow(ctx, `
+        INSERT INTO harborhook.deliveries(event_id, endpoint_id, status, replay_of, replay_reason)
+        VALUES ($1,$2,'queued',$3,$4)
+        RETURNING id
+    `, eventID, endpointID, req.GetDeliveryId(), req.GetReason()).Scan(&newID)
+    if err != nil {
+        return nil, fmt.Errorf("insert replay: %w", err)
+    }
+
+    // Publish the new task
+    var payload map[string]any
+    _ = json.Unmarshal([]byte(payloadJSON), &payload)
+    task := delivery.Task{
+        DeliveryID:  newID,
+        EventID:     eventID,
+        TenantID:    tenantID,
+        EndpointID:  endpointID,
+        EndpointURL: endpointURL,
+        EventType:   eventType,
+        Payload:     payload,
+        Attempt:     0,
+        PublishedAt: time.Now().UTC().Format(time.RFC3339),
+    }
+    b, _ := json.Marshal(task)
+    if err := s.prod.Publish(deliveriesTopic, b); err != nil {
+        return nil, fmt.Errorf("nsq publish: %w", err)
+    }
+
+    // Return the newly queued attempt
+    return &webhookv1.ReplayDeliveryResponse{
+        NewAttempt: &webhookv1.DeliveryAttempt{
+            DeliveryId: newID,
+            EventId:    eventID,
+            EndpointId: endpointID,
+            ReplayOf:   req.GetDeliveryId(),
+            Status:     webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_QUEUED,
+        },
+    }, nil
+}
+
+// ListDLQ returns deliveries present in the DLQ
+func (s *Server) ListDLQ(ctx context.Context, req *webhookv1.ListDLQRequest) (*webhookv1.ListDLQResponse, error) {
+    limit := int32(10)
+    if req.GetLimit() > 0 {
+        limit = req.GetLimit()
+    }
+
+    args := []any{}
+    where := "1=1"
+    if eid := req.GetEndpointId(); eid != "" {
+        where += " AND d.endpoint_id = $1"
+        args = append(args, eid)
+    }
+    // Use DLQ table ordering
+    q := fmt.Sprintf(`
+        SELECT d.id, d.event_id, d.endpoint_id, d.replay_of, d.status, d.http_status,
+               COALESCE(d.error_reason, d.last_error) AS err,
+               d.enqueued_at, d.dequeued_at, d.sent_at, d.delivered_at, d.failed_at, d.dlq_at
+        FROM harborhook.deliveries d
+        JOIN harborhook.dlq q ON q.delivery_id = d.id
+        WHERE %s
+        ORDER BY q.created_at DESC
+        LIMIT %d`, where, limit)
+
+    rows, err := s.pool.Query(ctx, q, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    var out []*webhookv1.DeliveryAttempt
+    for rows.Next() {
+        var (
+            id, eventID, endpointID string
+            replayOf sql.NullString
+            statusStr sql.NullString
+            httpStatus sql.NullInt32
+            errReason sql.NullString
+            enq, deq, sent, deliv, fail, dlq sql.NullTime
+        )
+        if err := rows.Scan(&id, &eventID, &endpointID, &replayOf, &statusStr, &httpStatus, &errReason,
+            &enq, &deq, &sent, &deliv, &fail, &dlq,
+        ); err != nil {
+            return nil, err
+        }
+        out = append(out, &webhookv1.DeliveryAttempt{
+            DeliveryId:  id,
+            EventId:     eventID,
+            EndpointId:  endpointID,
+            ReplayOf:    nullStr(replayOf),
+            Status:      mapStatus(nullStr(statusStr)),
+            HttpStatus:  nullI32(httpStatus),
+            ErrorReason: nullStr(errReason),
+            EnqueuedAt:  toTS(enq),
+            DequeuedAt:  toTS(deq),
+            SentAt:      toTS(sent),
+            DeliveredAt: toTS(deliv),
+            FailedAt:    toTS(fail),
+            DlqAt:       toTS(dlq),
+        })
+    }
+    if err := rows.Err(); err != nil {
+        return nil, err
+    }
+    return &webhookv1.ListDLQResponse{Dead: out}, nil
+}
+
+// --- helpers ---
+
+func nullStr(ns sql.NullString) string { if ns.Valid { return ns.String }; return "" }
+func nullI32(ni sql.NullInt32) int32 { if ni.Valid { return ni.Int32 }; return 0 }
+func toTS(nt sql.NullTime) *timestamppb.Timestamp { if nt.Valid { return timestamppb.New(nt.Time) }; return nil }
+
+func mapStatus(s string) webhookv1.DeliveryAttemptStatus {
+    switch s {
+    case "queued", "pending":
+        return webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_QUEUED
+    case "inflight":
+        return webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_IN_FLIGHT
+    case "delivered", "ok":
+        return webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_DELIVERED
+    case "failed":
+        return webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_FAILED
+    case "dead":
+        return webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_DEAD_LETTERED
+    default:
+        return webhookv1.DeliveryAttemptStatus_DELIVERY_ATTEMPT_STATUS_UNSPECIFIED
+    }
 }

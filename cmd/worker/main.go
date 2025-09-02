@@ -172,13 +172,19 @@ func main() {
 			return nil
 		}
 
+		// Mark dequeued/inflight
+		_, _ = pool.Exec(ctx, `
+			UPDATE harborhook.deliveries
+			SET status='inflight', dequeued_at=now(), updated_at=now()
+			WHERE id=$1`, t.DeliveryID)
+
 		// Fetch endpoint secret for signing
 		var secret sql.NullString
 		if err := pool.QueryRow(ctx, `SELECT secret FROM harborhook.endpoints WHERE id=$1`,
 			t.EndpointID).Scan(&secret); err != nil || !secret.Valid || secret.String == "" {
 			_, _ = pool.Exec(ctx, `
 				UPDATE harborhook.deliveries 
-				SET status='failed', attempt=attempt+1, updated_at=now(), last_error='endpoint_secret_missing' 
+				SET status='failed', attempt=attempt+1, failed_at=now(), updated_at=now(), last_error='endpoint_secret_missing' 
 				WHERE id=$1`, t.DeliveryID)
 			log.Printf("No secret for endpoint %s: %v", t.EndpointID, err)
 			metrics.DeliveriesTotal.WithLabelValues("failed").Inc()
@@ -200,6 +206,11 @@ func main() {
 		req.Header.Set(sigHeader, "sha256="+sig)
 
 		start := time.Now()
+		// record sent_at
+		_, _ = pool.Exec(ctx, `
+			UPDATE harborhook.deliveries
+			SET sent_at=$2, updated_at=now()
+			WHERE id=$1`, t.DeliveryID, start)
 		resp, doErr := httpClient.Do(req)
 		latency := time.Since(start)
 		status := 0
@@ -213,7 +224,7 @@ func main() {
 			// success: attempt+=, status=ok
 			_, updErr := pool.Exec(ctx, `
 				UPDATE harborhook.deliveries
-				SET status='ok', attempt=attempt+1, http_status=$1, latency_ms=$2, updated_at=now(), last_error=NULL
+				SET status='delivered', delivered_at=now(), attempt=attempt+1, http_status=$1, latency_ms=$2, updated_at=now(), last_error=NULL
 				WHERE id=$3`,
 				status, int(latency.Milliseconds()), t.DeliveryID,
 			)
@@ -229,7 +240,7 @@ func main() {
 		var newAttempt int
 		_, updErr := pool.Exec(ctx, `
 			UPDATE harborhook.deliveries
-			SET status='failed', attempt=attempt+1, http_status=$1, latency_ms=$2, updated_at=now(), last_error=$3
+			SET status='failed', failed_at=now(), attempt=attempt+1, http_status=$1, latency_ms=$2, updated_at=now(), last_error=$3
 			WHERE id=$4`,
 			status, int(latency.Milliseconds()), errString(doErr), t.DeliveryID,
 		)
@@ -250,7 +261,8 @@ func main() {
 		if newAttempt >= retry.maxAttempts {
 			// DLQ
 			_, qErr := pool.Exec(ctx, `
-				INSERT INTO harborhook.dlq(delivery_id, reason) VALUES ($1,$2)`,
+				INSERT INTO harborhook.dlq(delivery_id, reason) VALUES ($1,$2);
+				UPDATE harborhook.deliveries SET status='dead', dlq_at=now(), updated_at=now() WHERE id=$1;`,
 				t.DeliveryID, fmt.Sprintf("max attempts reached (%d), last status=%d, err=%s", newAttempt, status, errString(doErr)),
 			)
 			if qErr != nil {

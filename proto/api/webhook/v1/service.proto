@@ -32,6 +32,10 @@ option (openapi.v3.document) = {
     {
       name: "Events"
       description: "Get data about webhook events"
+    },
+    {
+      name: "Deliveries"
+      description: "Get data about webhook deliveries"
     }
   ]
 };
@@ -78,6 +82,40 @@ service WebhookService {
       description: "Publish a new webhook event"
     };
   }
+
+  rpc GetDeliveryStatus(GetDeliveryStatusRequest) returns (GetDeliveryStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/events/{event_id}/deliveries"
+    };
+
+    option (openapi.v3.operation) = {
+      tags: ["Events"]
+      description: "Get the delivery status of a specific event"
+    };
+  }
+
+  rpc ReplayDelivery(ReplayDeliveryRequest) returns (ReplayDeliveryResponse) {
+    option (google.api.http) = {
+      post: "/v1/deliveries/{delivery_id}:replay"
+      body: "*"
+    };
+
+    option (openapi.v3.operation) = {
+      tags: ["Deliveries"]
+      description: "Replay a specific delivery attempt"
+    };
+  }
+
+  rpc ListDLQ(ListDLQRequest) returns (ListDLQResponse) {
+    option (google.api.http) = {
+      get: "/v1/dlq"
+    };
+
+    option (openapi.v3.operation) = {
+      tags: ["Deliveries"]
+      description: "List all deliveries in the dead letter queue"
+    };
+  }
 }
 
 message PingRequest {}
@@ -116,9 +154,12 @@ message CreateEndpointRequest {
   // ID for the tenant
   string tenant_id = 1 [(buf.validate.field).required = true];
   // Target URL that we will send events to, e.g. http://fake-receiver:8081/hook
-  string url = 2 [(buf.validate.field).string.uri = true];
+  string url = 2 [
+    (buf.validate.field).string.uri = true,
+    (buf.validate.field).required = true
+  ];
   // Optional secret. If empty, server generates a secret for you
-  string secret = 3;
+  string secret = 3 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 // Create endpoint response message
@@ -155,45 +196,123 @@ message PublishEventRequest {
   // Payload data for the event (arbitrary JSON)
   google.protobuf.Struct payload = 3 [(buf.validate.field).required = true];
   // Required for deduplication, if empty, no dedup
-  string idempotency_key = 4;
+  string idempotency_key = 4 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 // Publish event response message
 message PublishEventResponse {
   // Event ID
-  string event_id = 1 [(buf.validate.field).string.uuid = true];
+  string event_id = 1 [
+    (buf.validate.field).string.uuid = true,
+    (buf.validate.field).required = true
+  ];
   // How many deliveries for this event are enqueued
   int32 fanout_count = 2 [(buf.validate.field).required = true];
 }
 
 message DeliveryAttempt {
   // Unique ID for the delivery attempt
-  string delivery_id  = 1 [(buf.validate.field).string.uuid = true];
+  string delivery_id = 1 [(buf.validate.field).string.uuid = true];
   // ID of the event being delivered
-  string event_id     = 2 [(buf.validate.field).string.uuid = true];
+  string event_id = 2 [(buf.validate.field).string.uuid = true];
   // ID of the endpoint being delivered to
-  string endpoint_id  = 3 [(buf.validate.field).string.uuid = true];
+  string endpoint_id = 3 [(buf.validate.field).string.uuid = true];
   // link to source attempt (if replayed)
-  string replay_of    = 4 [(buf.validate.field).string.uuid = true];
+  string replay_of = 4 [(buf.validate.field).string.uuid = true];
   // queued|inflight|delivered|failed|dead
-  string status       = 5; 
+  DeliveryAttemptStatus status = 5;
   // HTTP status code
-  int32 http_status   = 6;
+  int32 http_status = 6;
   // Optional error reason
   string error_reason = 7;
 
   // Timestamp of when the delivery was enqueued
-  google.protobuf.Timestamp enqueued_at  = 10 [(buf.validate.field).timestamp = {}];
+  google.protobuf.Timestamp enqueued_at = 10 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
   // Timestamp of when the delivery was dequeued
-  google.protobuf.Timestamp dequeued_at  = 11 [(buf.validate.field).timestamp = {}];
+  google.protobuf.Timestamp dequeued_at = 11 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
   // Timestamp of when the delivery was sent
-  google.protobuf.Timestamp sent_at      = 12 [(buf.validate.field).timestamp = {}];
+  google.protobuf.Timestamp sent_at = 12 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
   // Timestamp of when the delivery was delivered
-  google.protobuf.Timestamp delivered_at = 13 [(buf.validate.field).timestamp = {}];
+  google.protobuf.Timestamp delivered_at = 13 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
   // Timestamp of when the delivery failed
-  google.protobuf.Timestamp failed_at    = 14 [(buf.validate.field).timestamp = {}];
+  google.protobuf.Timestamp failed_at = 14 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
   // Timestamp of when the delivery was dead-lettered
-  google.protobuf.Timestamp dlq_at       = 15 [(buf.validate.field).timestamp = {}];
+  google.protobuf.Timestamp dlq_at = 15 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+}
+
+message GetDeliveryStatusRequest {
+  // ID of the event to check deliveries for
+  string event_id = 1 [
+    (buf.validate.field).string.uuid = true, 
+    (buf.validate.field).required = true
+  ];
+  // ID of the endpoint to check deliveries for
+  string endpoint_id = 2 [
+    (buf.validate.field).string.uuid = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  // Start datetime to search
+  google.protobuf.Timestamp from = 3 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  // End datetime to search
+  google.protobuf.Timestamp to = 4 [
+    (buf.validate.field).timestamp = {},
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  // Limit the number of results (default 10)
+  int32 limit = 5 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+}
+
+message GetDeliveryStatusResponse {
+  // List of delivery attempts
+  repeated DeliveryAttempt attempts = 1;
+}
+
+message ReplayDeliveryRequest {
+  // The ID of the delivery to replay
+  string delivery_id = 1 [
+    (buf.validate.field).string.uuid = true,
+    (buf.validate.field).required = true
+  ];
+  // Optional reason for replaying the delivery
+  string reason = 2 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+}
+
+message ReplayDeliveryResponse {
+  // The newly enqueued attempt
+  DeliveryAttempt new_attempt = 1 [(buf.validate.field).required = true];
+}
+
+message ListDLQRequest {
+  // ID of the endpoint to filter by
+  string endpoint_id = 1 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+  // Limit the number of results (default 10)
+  int32 limit = 2 [(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
+}
+
+message ListDLQResponse {
+  // List of delivery attempts in the DLQ
+  repeated DeliveryAttempt dead = 1[(buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE];
 }
 
 enum DeliveryAttemptStatus {
