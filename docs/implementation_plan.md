@@ -65,7 +65,7 @@
     - `GetDeliveryStatus(event_id)` and filters (by `endpoint_id`, time range)
 	- `ReplayDelivery(delivery_id)` --> republish a new delivery task (annotate `replay_of`)
 	- Optional batch replay by filter (time range, endpoint, reason)
-	- CLI (`harborctl`) wrappers for status & replay
+	- CLI (`harborctl`) wrappers for status, replay, timeline, and publish
 - Demo:
     - Force a DLQ, list DLQ items via REST/CLI
 	- Replay a single delivery, confirm new attempt succeeds and is linked to original (via `replay_of`)

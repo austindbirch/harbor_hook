@@ -136,3 +136,17 @@ services:
       - prometheus
     ports:
       - "3000:3000"
+
+  harborctl:
+    build:
+      context: ../../
+      dockerfile: cmd/harborctl/Dockerfile
+    container_name: hh-harborctl
+    environment:
+      - HARBORCTL_SERVER=ingest:8080
+    depends_on:
+      - ingest
+    profiles:
+      - tools
+    # This service is meant to be run manually with docker compose run
+    # Example: docker compose run --rm harborctl ping
