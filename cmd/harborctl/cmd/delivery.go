@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,9 @@ var deliveryCmd = &cobra.Command{
 	Use:   "delivery",
 	Short: "Manage webhook deliveries",
 	Long:  `Check delivery status, replay deliveries, and manage the dead letter queue.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Delivery,
+	},
 }
 
 // statusCmd represents the status command

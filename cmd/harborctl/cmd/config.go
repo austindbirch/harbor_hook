@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -16,6 +17,9 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage harborctl configuration",
 	Long:  `Manage harborctl configuration settings.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Config,
+	},
 }
 
 // configViewCmd represents the config view command

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,9 @@ var subscriptionCmd = &cobra.Command{
 	Use:   "subscription",
 	Short: "Manage webhook subscriptions",
 	Long:  `Create and manage webhook subscriptions that link endpoints to event types.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Subscription,
+	},
 }
 
 // createSubscriptionCmd represents the create subscription command

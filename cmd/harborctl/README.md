@@ -2,6 +2,16 @@
 
 `harborctl` is a CLI tool for interacting with Harborhook. It provides a complete set of tools for managing endpoints, subscriptions, events, and deliveries.
 
+## Features
+
+- Complete Harborhook API coverage
+- Pretty JSON output with automatic `jq` formatting
+- Flexible configuration management
+- Support for both gRPC and HTTP protocols
+- Shell completion for bash, zsh, fish, and PowerShell
+- Docker support
+- Rich output formatting options
+
 ## Installation
 
 ### From Source

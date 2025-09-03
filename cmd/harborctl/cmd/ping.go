@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,9 @@ var pingCmd = &cobra.Command{
 	Use:   "ping",
 	Short: "Ping the Harbor Hook service",
 	Long:  `Send a ping request to verify the Harbor Hook service is running and accessible.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Ping,
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if useHTTP {
 			resp, err := makeHTTPRequest("GET", "/v1/ping", nil)

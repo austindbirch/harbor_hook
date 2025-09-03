@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 )
@@ -14,6 +15,9 @@ var healthCmd = &cobra.Command{
 	Use:   "health",
 	Short: "Check the health of the Harbor Hook service",
 	Long:  `Check the health status of the Harbor Hook service using gRPC health checks.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Health,
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if useHTTP {
 			resp, err := makeHTTPRequest("GET", "/healthz", nil)

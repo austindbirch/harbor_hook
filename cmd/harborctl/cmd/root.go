@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 )
 
@@ -42,6 +43,9 @@ the Harbor Hook webhook delivery service.
 
 You can use it to publish events, check delivery status, replay deliveries, 
 and manage endpoints and subscriptions.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Root,
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

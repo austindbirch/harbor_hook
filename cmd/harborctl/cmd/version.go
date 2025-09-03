@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,9 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version information",
 	Long:  `Print the version information for harborctl.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Version,
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if outputJSON {
 			version := map[string]string{

@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	"github.com/spf13/cobra"
 )
 
@@ -10,6 +11,9 @@ import (
 var completionCmd = &cobra.Command{
 	Use:   "completion [bash|zsh|fish|powershell]",
 	Short: "Generate completion script",
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Completion,
+	},
 	Long: `To load completions:
 
 Bash:

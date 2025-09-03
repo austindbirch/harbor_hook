@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,9 @@ var eventCmd = &cobra.Command{
 	Use:   "event",
 	Short: "Manage webhook events",
 	Long:  `Publish webhook events and manage event deliveries.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Event,
+	},
 }
 
 // publishCmd represents the publish command

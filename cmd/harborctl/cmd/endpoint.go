@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,9 @@ var endpointCmd = &cobra.Command{
 	Use:   "endpoint",
 	Short: "Manage webhook endpoints",
 	Long:  `Create and manage webhook endpoints that will receive event deliveries.`,
+	Annotations: map[string]string{
+		ascii.AnnotationKey: ascii.Endpoint,
+	},
 }
 
 // createEndpointCmd represents the create endpoint command
