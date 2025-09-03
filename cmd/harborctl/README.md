@@ -57,7 +57,6 @@ harborctl config set json true
 
 # Enable pretty JSON formatting (requires jq)
 harborctl config set pretty true
-```
 
 # Use HTTP instead of gRPC
 harborctl config set http true
