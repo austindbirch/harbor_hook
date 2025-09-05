@@ -71,8 +71,8 @@
 	- Replay a single delivery, confirm new attempt succeeds and is linked to original (via `replay_of`)
 	- Query status timeline for `event_id`
 - AC: 
-    - [ ] Replay re-enqueues exactly one new delivery task
-    - [ ] Status API returns accurate attempt timeline
+    - [x] Replay re-enqueues exactly one new delivery task
+    - [x] Status API returns accurate attempt timeline
 
 ---
 ## Phase 4: Gateway and Security

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
@@ -93,7 +94,27 @@ Examples:
 			fmt.Printf("To install jq: https://jqlang.github.io/jq/download/\n\n")
 		}
 
-		viper.Set(key, value)
+		// Handle boolean values properly
+		switch key {
+		case "http", "json", "pretty":
+			switch value {
+			case "true", "1", "yes", "on":
+				viper.Set(key, true)
+			case "false", "0", "no", "off":
+				viper.Set(key, false)
+			default:
+				return fmt.Errorf("invalid boolean value for %s: %s (use true/false)", key, value)
+			}
+		case "timeout":
+			// Parse duration
+			if dur, err := time.ParseDuration(value); err == nil {
+				viper.Set(key, dur)
+			} else {
+				viper.Set(key, value)
+			}
+		default:
+			viper.Set(key, value)
+		}
 
 		// Ensure config directory exists
 		home, err := os.UserHomeDir()

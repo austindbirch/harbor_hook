@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
@@ -32,6 +33,33 @@ Example:
 		tenantID := args[0]
 		url := args[1]
 		secret, _ := cmd.Flags().GetString("secret")
+
+		if useHTTP {
+			payload := map[string]interface{}{
+				"url": url,
+			}
+			if secret != "" {
+				payload["secret"] = secret
+			}
+
+			resp, err := makeHTTPRequest("POST", fmt.Sprintf("/v1/tenants/%s/endpoints", tenantID), payload)
+			if err != nil {
+				return fmt.Errorf("HTTP request failed: %w", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("HTTP error: %s", resp.Status)
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return fmt.Errorf("failed to decode response: %w", err)
+			}
+
+			printOutput(result)
+			return nil
+		}
 
 		client, cleanup, err := getClient()
 		if err != nil {

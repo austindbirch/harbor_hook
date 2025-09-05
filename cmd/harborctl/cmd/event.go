@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
@@ -39,6 +40,34 @@ Example:
 		payload, err := parseJSON(payloadJSON)
 		if err != nil {
 			return fmt.Errorf("invalid payload JSON: %w", err)
+		}
+
+		if useHTTP {
+			httpPayload := map[string]interface{}{
+				"eventType": eventType,
+				"payload":   payload,
+			}
+			if idempotencyKey != "" {
+				httpPayload["idempotencyKey"] = idempotencyKey
+			}
+
+			resp, err := makeHTTPRequest("POST", fmt.Sprintf("/v1/tenants/%s/events:publish", tenantID), httpPayload)
+			if err != nil {
+				return fmt.Errorf("HTTP request failed: %w", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("HTTP error: %s", resp.Status)
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return fmt.Errorf("failed to decode response: %w", err)
+			}
+
+			printOutput(result)
+			return nil
 		}
 
 		client, cleanup, err := getClient()

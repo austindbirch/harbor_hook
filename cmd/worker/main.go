@@ -259,14 +259,22 @@ func main() {
 		metrics.RetriesTotal.WithLabelValues(reason).Inc()
 
 		if newAttempt >= retry.maxAttempts {
-			// DLQ
+			// DLQ - Insert into DLQ table first
 			_, qErr := pool.Exec(ctx, `
-				INSERT INTO harborhook.dlq(delivery_id, reason) VALUES ($1,$2);
-				UPDATE harborhook.deliveries SET status='dead', dlq_at=now(), updated_at=now() WHERE id=$1;`,
+				INSERT INTO harborhook.dlq(delivery_id, reason) VALUES ($1,$2)`,
 				t.DeliveryID, fmt.Sprintf("max attempts reached (%d), last status=%d, err=%s", newAttempt, status, errString(doErr)),
 			)
 			if qErr != nil {
 				log.Printf("dlq insert %s: %v", t.DeliveryID, qErr)
+			}
+
+			// Update delivery status to dead (this will trigger our automatic dlq_at timestamp)
+			_, updateErr := pool.Exec(ctx, `
+				UPDATE harborhook.deliveries SET status='dead' WHERE id=$1`,
+				t.DeliveryID,
+			)
+			if updateErr != nil {
+				log.Printf("dlq status update %s: %v", t.DeliveryID, updateErr)
 			}
 
 			// DLQ (topic publish)

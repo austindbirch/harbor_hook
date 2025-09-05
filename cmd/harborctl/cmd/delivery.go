@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/austindbirch/harbor_hook/cmd/harborctl/cmd/ascii"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
@@ -50,6 +52,46 @@ Example:
 		limit, err := parseInt32(limitStr)
 		if err != nil {
 			return fmt.Errorf("invalid limit: %w", err)
+		}
+
+		if useHTTP {
+			// Build query parameters for HTTP request
+			params := url.Values{}
+			if endpointID != "" {
+				params.Add("endpointId", endpointID)
+			}
+			if fromStr != "" {
+				params.Add("from", fromStr)
+			}
+			if toStr != "" {
+				params.Add("to", toStr)
+			}
+			if limitStr != "" {
+				params.Add("limit", limitStr)
+			}
+
+			path := fmt.Sprintf("/v1/events/%s/deliveries", eventID)
+			if len(params) > 0 {
+				path += "?" + params.Encode()
+			}
+
+			resp, err := makeHTTPRequest("GET", path, nil)
+			if err != nil {
+				return fmt.Errorf("HTTP request failed: %w", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("HTTP error: %s", resp.Status)
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return fmt.Errorf("failed to decode response: %w", err)
+			}
+
+			printOutput(result)
+			return nil
 		}
 
 		client, cleanup, err := getClient()
@@ -127,6 +169,31 @@ Example:
 		deliveryID := args[0]
 		reason, _ := cmd.Flags().GetString("reason")
 
+		if useHTTP {
+			payload := map[string]interface{}{}
+			if reason != "" {
+				payload["reason"] = reason
+			}
+
+			resp, err := makeHTTPRequest("POST", fmt.Sprintf("/v1/deliveries/%s:replay", deliveryID), payload)
+			if err != nil {
+				return fmt.Errorf("HTTP request failed: %w", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("HTTP error: %s", resp.Status)
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return fmt.Errorf("failed to decode response: %w", err)
+			}
+
+			printOutput(result)
+			return nil
+		}
+
 		client, cleanup, err := getClient()
 		if err != nil {
 			return fmt.Errorf("failed to connect: %w", err)
@@ -158,6 +225,41 @@ Example:
 	},
 }
 
+// dlqHTTPRequest handles HTTP requests for DLQ operations
+func dlqHTTPRequest(endpointID, limitStr string) error {
+	// Build query parameters for HTTP request
+	params := url.Values{}
+	if endpointID != "" {
+		params.Add("endpointId", endpointID)
+	}
+	if limitStr != "" {
+		params.Add("limit", limitStr)
+	}
+
+	path := "/v1/dlq"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+
+	resp, err := makeHTTPRequest("GET", path, nil)
+	if err != nil {
+		return fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("HTTP error: %s", resp.Status)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	printOutput(result)
+	return nil
+}
+
 // dlqCmd represents the dlq command
 var dlqCmd = &cobra.Command{
 	Use:   "dlq",
@@ -175,9 +277,16 @@ Example:
 			return fmt.Errorf("invalid limit: %w", err)
 		}
 
+		// Try HTTP first if explicitly requested
+		if useHTTP {
+			return dlqHTTPRequest(endpointID, limitStr)
+		}
+
+		// Try gRPC first, fallback to HTTP on failure
 		client, cleanup, err := getClient()
 		if err != nil {
-			return fmt.Errorf("failed to connect: %w", err)
+			// gRPC failed, try HTTP fallback
+			return dlqHTTPRequest(endpointID, limitStr)
 		}
 		defer cleanup()
 
@@ -189,7 +298,8 @@ Example:
 
 		resp, err := client.ListDLQ(ctx, req)
 		if err != nil {
-			return fmt.Errorf("failed to list DLQ: %w", err)
+			// gRPC call failed, try HTTP fallback
+			return dlqHTTPRequest(endpointID, limitStr)
 		}
 
 		if outputJSON {

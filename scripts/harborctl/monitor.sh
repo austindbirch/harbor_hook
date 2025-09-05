@@ -53,7 +53,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 check_harborctl() {
-    if ! command -v harborctl &> /dev/null; then
+    # Check for local binary first, then global
+    if [ -f "./bin/harborctl" ]; then
+        HARBORCTL="./bin/harborctl"
+        echo -e "${GREEN}Using local harborctl binary${NC}"
+    elif command -v harborctl &> /dev/null; then
+        HARBORCTL="harborctl"
+        echo -e "${GREEN}Using global harborctl binary${NC}"
+    else
         echo -e "${RED}❌ harborctl not found${NC}"
         echo "Please build and install it first: make build-cli && make install-cli"
         exit 1
@@ -61,7 +68,7 @@ check_harborctl() {
 }
 
 check_service() {
-    if ! harborctl ping >/dev/null 2>&1; then
+    if ! $HARBORCTL ping >/dev/null 2>&1; then
         echo -e "${RED}❌ Harbor Hook service is not responding${NC}"
         return 1
     fi
@@ -74,7 +81,7 @@ get_dlq_stats() {
         dlq_args="$dlq_args --endpoint-id $ENDPOINT_ID"
     fi
     
-    harborctl delivery dlq $dlq_args | jq -r '
+    $HARBORCTL delivery dlq $dlq_args | jq -r '
         .dead | length as $count |
         if $count > 0 then
             group_by(.endpointId) | map({
@@ -120,7 +127,7 @@ display_recent_dlq() {
         dlq_args="$dlq_args --endpoint-id $ENDPOINT_ID"
     fi
     
-    local dlq_entries=$(harborctl delivery dlq $dlq_args)
+    local dlq_entries=$($HARBORCTL delivery dlq $dlq_args)
     local count=$(echo "$dlq_entries" | jq '.dead | length')
     
     if [[ "$count" -eq 0 ]]; then
