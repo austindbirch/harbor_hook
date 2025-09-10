@@ -79,17 +79,17 @@
 - End Goal: Production-grade edge: Envoy API gateway with JWT auth, TLS termination, body size limits, mTLS for internal gRPC
 - What we add:
     - Envoy fronting gRPC and REST (grpc-gateway behind Envoy)
-	- JWT verification (RS256), extracting `tenant_id` claim, public key rotation via JWKS
-	- Request constraints: HTTPS only, max body 1 mb, gzip, basic request/conn limits
-	- mTLS between Envoy<>services (cert‑manager for certs in k8s later, self-signed in Docker dev)
+    - JWT verification (RS256), extracting `tenant_id` claim, public key rotation via JWKS
+    - Request constraints: HTTPS only, max body 1 mb, gzip, basic request/conn limits
+    - mTLS between Envoy<>services (cert‑manager for certs in k8s later, self-signed in Docker dev)
 - Demo:
     - Call APIs without JWT --> 401
-	- Call with valid JWT (`tenant_id = tn_123`) --> success
-	- Confirm TLS termination at Envoy, internal calls use mTLS
+    - Call with valid JWT (`tenant_id = tn_123`) --> success
+    - Confirm TLS termination at Envoy, internal calls use mTLS
 - AC: 
-    - [ ] Unauthed requests = blocked, authed = pass
-    - [ ] TLS/mTLS enforced, limits applied
-
+    - [x] Unauthed requests = blocked, authed = pass
+    - [x] TLS/mTLS enforced, limits applied
+    
 ---
 ## Phase 5: Observability Stack
 - End Goal: Full-stack observability that tells a complete story: metrics, logs, traces, and SLO-based alerts
@@ -150,11 +150,12 @@
     - [ ] CI artifacts (k8s test logs, screenshots)
 
 ---
-## Phase 8: Runbooks and Documentation
+## Phase 8: Runbooks, Documentation, Data Seeding
 - End Goal: Show that this can be run like a platform: safe deploys, crisp runbooks
 - What we add:
     - Runbooks checked in: DLQ spike, backlog growth, high latency, auth/JWT rotation, cert rotation
     - Document polish: diagrams, quickstart, demo scripts, dashboard screenshots, "how to verify signatures"
+    - Script that seeds some fake data for testing and demoing--at least a few thousand messages, across multiple tenants/endpoints/subscriptions/delivery states
 - Demo:
     - Go through quickstart process in a new env
 - AC:

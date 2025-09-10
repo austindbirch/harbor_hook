@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,6 +33,7 @@ var (
 	useHTTP    bool
 	outputJSON bool
 	prettyJSON bool
+	jwtToken   string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -58,11 +60,12 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.harborctl.yaml)")
-	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "localhost:8080", "server address (host:port)")
+	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "localhost:8443", "server address (host:port) - defaults to HTTPS gateway")
 	rootCmd.PersistentFlags().DurationVar(&timeout, "timeout", 30*time.Second, "request timeout")
 	rootCmd.PersistentFlags().BoolVar(&useHTTP, "http", false, "use HTTP instead of gRPC")
 	rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&prettyJSON, "pretty", false, "use jq for pretty JSON formatting (requires jq)")
+	rootCmd.PersistentFlags().StringVar(&jwtToken, "token", "", "JWT token for authentication (overrides JWT_TOKEN env var)")
 
 	// Bind flags to viper
 	viper.BindPFlag("server", rootCmd.PersistentFlags().Lookup("server"))
@@ -70,6 +73,7 @@ func init() {
 	viper.BindPFlag("http", rootCmd.PersistentFlags().Lookup("http"))
 	viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))
 	viper.BindPFlag("pretty", rootCmd.PersistentFlags().Lookup("pretty"))
+	viper.BindPFlag("token", rootCmd.PersistentFlags().Lookup("token"))
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -111,6 +115,13 @@ func initConfig() {
 	if !rootCmd.PersistentFlags().Changed("pretty") {
 		prettyJSON = viper.GetBool("pretty")
 	}
+	if !rootCmd.PersistentFlags().Changed("token") {
+		if t := viper.GetString("token"); t != "" {
+			jwtToken = t
+		} else if t := os.Getenv("JWT_TOKEN"); t != "" {
+			jwtToken = t
+		}
+	}
 }
 
 // getClient returns a gRPC client for the webhook service
@@ -134,7 +145,15 @@ func getClient() (webhookv1.WebhookServiceClient, func(), error) {
 
 // makeHTTPRequest makes an HTTP request to the REST API
 func makeHTTPRequest(method, path string, body interface{}) (*http.Response, error) {
-	client := &http.Client{Timeout: timeout}
+	// Create HTTP client with TLS support for HTTPS
+	tr := &http.Transport{
+		TLSClientConfig:    &tls.Config{InsecureSkipVerify: true}, // For development with self-signed certs
+		DisableCompression: true,                                  // Disable compression to avoid parsing issues
+	}
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: tr,
+	}
 
 	var bodyReader strings.Reader
 	if body != nil {
@@ -145,7 +164,10 @@ func makeHTTPRequest(method, path string, body interface{}) (*http.Response, err
 		bodyReader = *strings.NewReader(string(bodyBytes))
 	}
 
-	url := fmt.Sprintf("http://%s%s", serverAddr, path)
+	// Always use HTTPS for the gateway (useHTTP only controls gRPC vs HTTP/REST)
+	scheme := "https"
+	url := fmt.Sprintf("%s://%s%s", scheme, serverAddr, path)
+
 	req, err := http.NewRequest(method, url, &bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -153,6 +175,11 @@ func makeHTTPRequest(method, path string, body interface{}) (*http.Response, err
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// Add JWT token if available
+	if jwtToken != "" {
+		req.Header.Set("Authorization", "Bearer "+jwtToken)
 	}
 
 	return client.Do(req)

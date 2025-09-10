@@ -50,6 +50,41 @@ services:
     ports:
       - "4171:4171"
 
+  # JWKS server for JWT key management
+  jwks-server:
+    build:
+      context: ../../
+      dockerfile: cmd/jwks-server/Dockerfile
+    container_name: hh-jwks-server
+    environment:
+      PORT: "8082"
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Envoy API Gateway
+  envoy:
+    build:
+      context: ./envoy
+    container_name: hh-envoy
+    depends_on:
+      jwks-server:
+        condition: service_healthy
+      ingest:
+        condition: service_started
+    ports:
+      - "8443:8443"  # HTTPS API Gateway
+      - "9901:9901"  # Envoy Admin
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9901/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
   ingest:
     build:
       context: ../../
@@ -66,14 +101,21 @@ services:
       DB_NAME: ${DB_NAME}
       NSQD_TCP_ADDR: ${NSQD_TCP_ADDR}
       NSQLOOKUPD_HTTP_ADDR: ${NSQLOOKUPD_HTTP_ADDR}
+      # JWT Configuration
+      JWT_ISSUER: "harborhook"
+      JWT_AUDIENCE: "harborhook-api"
+      ENABLE_TLS: "false"
     depends_on:
       postgres:
         condition: service_healthy
       nsqd:
         condition: service_started
-    ports:
-      - "${INGEST_HTTP_PORT}:${INGEST_HTTP_PORT}"
-      - "${INGEST_GRPC_PORT}:${INGEST_GRPC_PORT}"
+    volumes:
+      - ./envoy/certs:/etc/certs:ro
+    # Note: Only expose internally, Envoy will handle external traffic
+    expose:
+      - "${INGEST_HTTP_PORT}"
+      - "${INGEST_GRPC_PORT}"
 
   worker:
     build: 
@@ -95,8 +137,14 @@ services:
       BACKOFF_SCHEDULE: ${BACKOFF_SCHEDULE}
       BACKOFF_JITTER_PCT: ${BACKOFF_JITTER_PCT}
       PUBLISH_DLQ_TOPIC: ${PUBLISH_DLQ_TOPIC}
+      # JWT Configuration
+      JWT_ISSUER: "harborhook"
+      JWT_AUDIENCE: "harborhook-api"
+      ENABLE_TLS: "false"
     depends_on:
       - nsqd
+    volumes:
+      - ./envoy/certs:/etc/certs:ro
     ports:
       - "${WORKER_HTTP_PORT}:${WORKER_HTTP_PORT}"
 
@@ -143,9 +191,14 @@ services:
       dockerfile: cmd/harborctl/Dockerfile
     container_name: hh-harborctl
     environment:
-      - HARBORCTL_SERVER=ingest:8080
+      # Point to Envoy gateway instead of direct ingest
+      - HARBORCTL_SERVER=https://envoy:8443
+      - HARBORCTL_INSECURE=false
+      - HARBORCTL_CA_CERT=/etc/certs/ca.crt
     depends_on:
-      - ingest
+      - envoy
+    volumes:
+      - ./envoy/certs:/etc/certs:ro
     profiles:
       - tools
     # This service is meant to be run manually with docker compose run

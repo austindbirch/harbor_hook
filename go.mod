@@ -4,6 +4,7 @@ go 1.24.6
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.8-20250717185734-6c6e0d3c608e.1
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/gnostic v0.7.1
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2
 	github.com/jackc/pgx/v5 v5.7.5

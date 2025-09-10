@@ -1,167 +1,138 @@
 #!/bin/bash
-# monitor.sh - Monitoring script for Harbor Hook
+# monitor.sh - Real-time monitoring for Harbor Hook deliveries with JWT authentication
 
 set -e
-
-# Configuration
-REFRESH_INTERVAL=5
-ENDPOINT_ID=""
-LIMIT=10
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-usage() {
-    echo "Usage: $0 [OPTIONS]"
-    echo "Monitor Harbor Hook delivery status"
-    echo ""
-    echo "Options:"
-    echo "  -e, --endpoint-id ID    Filter by endpoint ID"
-    echo "  -i, --interval SEC      Refresh interval in seconds (default: 5)"
-    echo "  -l, --limit NUM         Limit number of results (default: 10)"
-    echo "  -h, --help              Show this help"
+# Configuration
+REFRESH_INTERVAL=${REFRESH_INTERVAL:-5}
+SERVER_HOST=${SERVER_HOST:-"localhost:8443"}  # HTTPS gateway
+JWKS_HOST=${JWKS_HOST:-"localhost:8082"}      # JWT token server
+TENANT_ID=${TENANT_ID:-"demo_tenant"}
+HARBORCTL="${HARBORCTL:-./bin/harborctl}"
+
+# Print colored output
+print_header() {
+    echo -e "${BOLD}${BLUE}$1${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}$1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}$1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}$1${NC}"
+}
+
+# Function to get JWT token
+get_jwt_token() {
+    local token_response
+    token_response=$(curl -s -X POST "http://$JWKS_HOST/token" \
+        -H "Content-Type: application/json" \
+        -d "{\"tenant_id\":\"$TENANT_ID\"}" 2>/dev/null || {
+        print_error "Failed to get JWT token from $JWKS_HOST"
+        return 1
+    })
+    
+    # Extract token from JSON response
+    echo "$token_response" | jq -r '.token' 2>/dev/null || {
+        print_error "Failed to parse JWT token from response"
+        return 1
+    }
+}
+
+# Function to refresh JWT token
+refresh_token() {
+    JWT_TOKEN=$(get_jwt_token)
+    if [[ -z "$JWT_TOKEN" || "$JWT_TOKEN" == "null" ]]; then
+        print_error "Failed to refresh JWT token"
+        return 1
+    fi
+    export JWT_TOKEN
+}
+
+# Cleanup function
+cleanup() {
+    echo -e "
+${YELLOW}Monitoring stopped${NC}"
+    exit 0
+}
+
+# Set up signal handling
+trap cleanup INT TERM
+
+print_header "🔍 Harbor Hook Delivery Monitor (with JWT Authentication)"
+echo "=========================================================="
+echo "Refresh interval: ${REFRESH_INTERVAL}s"
+echo "Server: $SERVER_HOST (HTTPS)"
+echo "JWKS server: $JWKS_HOST"
+echo "Tenant: $TENANT_ID"
+echo "Press Ctrl+C to stop"
+echo
+
+# Initial token
+refresh_token || {
+    print_error "Failed to obtain initial JWT token"
     exit 1
 }
 
-# Parse command line arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -e|--endpoint-id)
-            ENDPOINT_ID="$2"
-            shift 2
-            ;;
-        -i|--interval)
-            REFRESH_INTERVAL="$2"
-            shift 2
-            ;;
-        -l|--limit)
-            LIMIT="$2"
-            shift 2
-            ;;
-        -h|--help)
-            usage
-            ;;
-        *)
-            echo "Unknown option: $1"
-            usage
-            ;;
-    esac
-done
+# Token refresh counter (refresh every 50 iterations to avoid token expiry)
+token_refresh_counter=0
 
-check_harborctl() {
-    # Check for local binary first, then global
-    if [ -f "./bin/harborctl" ]; then
-        HARBORCTL="./bin/harborctl"
-        echo -e "${GREEN}Using local harborctl binary${NC}"
-    elif command -v harborctl &> /dev/null; then
-        HARBORCTL="harborctl"
-        echo -e "${GREEN}Using global harborctl binary${NC}"
-    else
-        echo -e "${RED}❌ harborctl not found${NC}"
-        echo "Please build and install it first: make build-cli && make install-cli"
-        exit 1
+while true; do
+    # Refresh token periodically
+    if [ $((token_refresh_counter % 50)) -eq 0 ]; then
+        refresh_token || {
+            print_warning "Token refresh failed, continuing with existing token"
+        }
     fi
-}
+    token_refresh_counter=$((token_refresh_counter + 1))
 
-check_service() {
-    if ! $HARBORCTL ping >/dev/null 2>&1; then
-        echo -e "${RED}❌ Harbor Hook service is not responding${NC}"
-        return 1
-    fi
-    return 0
-}
-
-get_dlq_stats() {
-    local dlq_args="--limit $LIMIT --json"
-    if [[ -n "$ENDPOINT_ID" ]]; then
-        dlq_args="$dlq_args --endpoint-id $ENDPOINT_ID"
-    fi
-    
-    $HARBORCTL delivery dlq $dlq_args | jq -r '
-        .dead | length as $count |
-        if $count > 0 then
-            group_by(.endpointId) | map({
-                endpoint: .[0].endpointId,
-                count: length
-            }) | "DLQ Entries: \($count) total | " + (map("\(.endpoint): \(.count)") | join(", "))
-        else
-            "DLQ Entries: 0"
-        end
-    '
-}
-
-display_header() {
+    # Clear screen and show timestamp
     clear
-    echo -e "${BLUE}===========================================${NC}"
-    echo -e "${BLUE}        Harbor Hook Monitor${NC}"
-    echo -e "${BLUE}===========================================${NC}"
-    echo -e "Refresh interval: ${REFRESH_INTERVAL}s | Limit: ${LIMIT}"
-    if [[ -n "$ENDPOINT_ID" ]]; then
-        echo -e "Filtering by endpoint: ${ENDPOINT_ID}"
-    fi
-    echo -e "Press Ctrl+C to exit"
-    echo ""
-}
-
-display_service_status() {
-    if check_service; then
-        echo -e "${GREEN}✅ Service Status: HEALTHY${NC}"
+    print_header "🔍 Harbor Hook Delivery Monitor"
+    echo "Last updated: $(date)"
+    echo "Token status: $([ -n "$JWT_TOKEN" ] && echo "✓ Valid" || echo "✗ Invalid")"
+    echo "================================================"
+    
+    # Health check
+    echo -e "
+${BOLD}Service Health:${NC}"
+    if $HARBORCTL ping --server "$SERVER_HOST" >/dev/null 2>&1; then
+        print_success "✓ Service is healthy"
     else
-        echo -e "${RED}❌ Service Status: UNHEALTHY${NC}"
-    fi
-}
-
-display_dlq_summary() {
-    echo -e "\n${YELLOW}📊 Dead Letter Queue Summary${NC}"
-    echo "$(get_dlq_stats)"
-}
-
-display_recent_dlq() {
-    echo -e "\n${YELLOW}💀 Recent DLQ Entries${NC}"
-    local dlq_args="--limit 5 --json"
-    if [[ -n "$ENDPOINT_ID" ]]; then
-        dlq_args="$dlq_args --endpoint-id $ENDPOINT_ID"
+        print_error "✗ Service unavailable"
     fi
     
-    local dlq_entries=$($HARBORCTL delivery dlq $dlq_args)
-    local count=$(echo "$dlq_entries" | jq '.dead | length')
+    # Recent delivery stats (if available)
+    echo -e "
+${BOLD}Recent Delivery Activity:${NC}"
     
-    if [[ "$count" -eq 0 ]]; then
-        echo "  No entries in DLQ"
+    # Show recent DLQ entries
+    echo -e "
+${BOLD}Dead Letter Queue (Last 10):${NC}"
+    DLQ_OUTPUT=$($HARBORCTL delivery dlq --limit 10 --server "$SERVER_HOST" 2>/dev/null || echo "Failed to fetch DLQ")
+    
+    if [[ "$DLQ_OUTPUT" == "Failed to fetch DLQ" ]]; then
+        print_warning "Unable to fetch DLQ entries"
+    elif [[ -z "$DLQ_OUTPUT" || "$DLQ_OUTPUT" == *"No DLQ entries found"* ]]; then
+        print_success "✓ No failed deliveries"
     else
-        echo "$dlq_entries" | jq -r '
-            .dead[] | 
-            "  • \(.deliveryId) | Event: \(.eventId) | Error: \(.errorReason // "unknown") | DLQ: \(.dlqAt)"
-        '
+        echo "$DLQ_OUTPUT"
     fi
-}
-
-monitor_loop() {
-    while true; do
-        display_header
-        display_service_status
-        display_dlq_summary
-        display_recent_dlq
-        
-        echo -e "\n${BLUE}Last updated: $(date)${NC}"
-        sleep "$REFRESH_INTERVAL"
-    done
-}
-
-main() {
-    check_harborctl
     
-    echo -e "${GREEN}Starting Harbor Hook monitor...${NC}"
-    sleep 1
-    
-    # Set up trap to clean up on exit
-    trap 'echo -e "\n${YELLOW}Monitor stopped${NC}"; exit 0' INT TERM
-    
-    monitor_loop
-}
-
-main "$@"
+    echo -e "
+${YELLOW}Refreshing in ${REFRESH_INTERVAL}s... (Ctrl+C to stop)${NC}"
+    sleep $REFRESH_INTERVAL
+done

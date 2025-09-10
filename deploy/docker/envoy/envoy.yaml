@@ -1,0 +1,181 @@
+static_resources:
+  listeners:
+  - name: https_listener
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8443
+    listener_filters:
+    - name: envoy.filters.listener.tls_inspector
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+    filter_chains:
+    - transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain:
+                filename: /etc/envoy/certs/server.crt
+              private_key:
+                filename: /etc/envoy/certs/server.key
+            validation_context:
+              trusted_ca:
+                filename: /etc/envoy/certs/ca.crt
+      filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: https_ingress
+          codec_type: AUTO
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: harborhook_service
+              domains: ["*"]
+              routes:
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: harborhook_backend
+                  timeout: 30s
+          http_filters:
+          # Body size limit filter
+          - name: envoy.filters.http.buffer
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+              max_request_bytes: 1048576  # 1MB
+          # Compression filter - only compress responses, not requests
+          - name: envoy.filters.http.compressor
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.compressor.v3.Compressor
+              response_direction_config:
+                common_config:
+                  min_content_length: 1024
+                  content_type:
+                  - "application/json"
+                  - "application/grpc"
+                  - "text/plain"
+              # Remove request_direction_config to disable request compression
+              # This prevents issues with gRPC-Gateway parsing compressed JSON
+              compressor_library:
+                name: envoy.compression.gzip.compressor
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.compression.gzip.compressor.v3.Gzip
+          # JWT Authentication filter
+          - name: envoy.filters.http.jwt_authn
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+              providers:
+                harborhook_auth:
+                  issuer: "harborhook"
+                  audiences:
+                  - "harborhook-api"
+                  remote_jwks:
+                    http_uri:
+                      uri: "http://jwks-server:8082/.well-known/jwks.json"
+                      cluster: jwks_cluster
+                      timeout: 5s
+                    cache_duration: 300s
+                  forward: true
+                  payload_in_metadata: "jwt_payload"
+              rules:
+              - match:
+                  prefix: "/v1/ping"
+                # Health check endpoint - no auth required
+              - match:
+                  prefix: "/"
+                requires:
+                  provider_name: "harborhook_auth"
+          # Lua filter to extract tenant_id from JWT
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                function envoy_on_request(request_handle)
+                  local metadata = request_handle:streamInfo():dynamicMetadata()
+                  local jwt_payload = metadata:get("envoy.filters.http.jwt_authn")
+                  
+                  if jwt_payload and jwt_payload["jwt_payload"] then
+                    local payload = jwt_payload["jwt_payload"]
+                    if payload["tenant_id"] then
+                      request_handle:headers():add("x-tenant-id", payload["tenant_id"])
+                    end
+                  end
+                end
+          # Rate limiting filter
+          - name: envoy.filters.http.local_ratelimit
+            typed_config:
+              "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+              type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+              value:
+                stat_prefix: http_local_rate_limiter
+                token_bucket:
+                  max_tokens: 100
+                  tokens_per_fill: 100
+                  fill_interval: 60s
+                filter_enabled:
+                  runtime_key: local_rate_limit_enabled
+                  default_value:
+                    numerator: 100
+                    denominator: HUNDRED
+                filter_enforced:
+                  runtime_key: local_rate_limit_enforced
+                  default_value:
+                    numerator: 100
+                    denominator: HUNDRED
+          # Router filter (must be last)
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+  - name: harborhook_backend
+    connect_timeout: 0.25s
+    type: LOGICAL_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: harborhook_backend
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: ingest
+                port_value: 8080
+    # For now, use plain HTTP to backend services
+    # In production, we'd want mTLS here
+    # transport_socket:
+    #   name: envoy.transport_sockets.tls
+    #   typed_config:
+    #     "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+    #     common_tls_context:
+    #       tls_certificates:
+    #       - certificate_chain:
+    #           filename: /etc/envoy/certs/client.crt
+    #         private_key:
+    #           filename: /etc/envoy/certs/client.key
+    #       validation_context:
+    #         trusted_ca:
+    #           filename: /etc/envoy/certs/ca.crt
+
+  - name: jwks_cluster
+    connect_timeout: 0.25s
+    type: LOGICAL_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: jwks_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: jwks-server
+                port_value: 8082
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
