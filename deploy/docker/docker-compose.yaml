@@ -105,6 +105,9 @@ services:
       JWT_ISSUER: "harborhook"
       JWT_AUDIENCE: "harborhook-api"
       ENABLE_TLS: "false"
+      # OpenTelemetry Configuration
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4318"
+      OTEL_SERVICE_NAME: "harborhook-ingest"
     depends_on:
       postgres:
         condition: service_healthy
@@ -141,6 +144,9 @@ services:
       JWT_ISSUER: "harborhook"
       JWT_AUDIENCE: "harborhook-api"
       ENABLE_TLS: "false"
+      # OpenTelemetry Configuration
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4318"
+      OTEL_SERVICE_NAME: "harborhook-worker"
     depends_on:
       - nsqd
     volumes:
@@ -157,6 +163,7 @@ services:
       FAIL_FIRST: ${FAIL_FIRST}
       ENDPOINT_SECRET: ${ENDPOINT_SECRET}
       SIGNING_LEEWAY_SECONDS: ${SIGNING_LEEWAY_SECONDS}
+      RESPONSE_DELAY_MS: ${RESPONSE_DELAY_MS:-0}
     ports:
       - "8081:8081"
 
@@ -171,6 +178,63 @@ services:
       - ./prometheus/data:/prometheus
     ports:
       - "9090:9090"
+    depends_on:
+      - alertmanager
+
+  # AlertManager for handling alerts
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: hh-alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/data:/alertmanager
+    ports:
+      - "9093:9093"
+
+  # Tempo for distributed tracing
+  tempo:
+    image: grafana/tempo:latest
+    container_name: hh-tempo
+    command:
+      - "-config.file=/etc/tempo.yaml"
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - ./tempo/data:/tmp/tempo
+    ports:
+      - "3200:3200"  # Tempo HTTP
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+      - "9095:9095"  # Frontend gRPC
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: hh-loki
+    command:
+      - "-config.file=/etc/loki/local-config.yaml"
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - ./loki/data:/loki
+    ports:
+      - "3100:3100"
+
+  # Promtail for log shipping
+  promtail:
+    image: grafana/promtail:latest
+    container_name: hh-promtail
+    command:
+      - "-config.file=/etc/promtail/config.yaml"
+    volumes:
+      - ./promtail/promtail.yaml:/etc/promtail/config.yaml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - loki
 
   grafana:
     image: grafana/grafana-oss:latest
@@ -180,8 +244,12 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD}
     volumes:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - loki
+      - tempo
     ports:
       - "3000:3000"
 

@@ -1,5 +1,18 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alert-rules.yaml"
+
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
@@ -9,4 +22,4 @@ scrape_configs:
       - targets: ['ingest:8080'] # Using service name instead of localhost to point Prom at the container DNS names on the Compose network
   - job_name: 'worker'
     static_configs:
-      - targets: ['worker:8082'] # Using service name instead of localhost to point Prom at the container DNS names on the Compose network
+      - targets: ['worker:8083'] # Using service name instead of localhost to point Prom at the container DNS names on the Compose network

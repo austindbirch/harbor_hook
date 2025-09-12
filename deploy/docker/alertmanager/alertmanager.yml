@@ -1,0 +1,83 @@
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'harborhook-alerts@example.com'
+  # Slack webhook URL - replace with your actual webhook
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
+  routes:
+    # Critical alerts go to Slack immediately
+    - match:
+        severity: critical
+      receiver: 'slack-critical'
+      group_wait: 0s
+      repeat_interval: 15m
+    
+    # SLO burn rate alerts
+    - match:
+        alertname: HarborHookSLOBurnRateHigh
+      receiver: 'slo-alerts'
+      group_wait: 5s
+      repeat_interval: 30m
+    
+    # System alerts
+    - match:
+        alertname: HarborHookBacklogHigh
+      receiver: 'system-alerts'
+      group_wait: 30s
+      repeat_interval: 1h
+
+receivers:
+  - name: 'web.hook'
+    webhook_configs:
+      - url: 'http://fake-receiver:8081/webhook'
+        send_resolved: true
+
+  - name: 'slack-critical'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#harborhook-alerts'
+        color: 'danger'
+        title: 'Harbor Hook Critical Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Tenant:* {{ .Labels.tenant_id }}
+          {{ end }}
+        send_resolved: true
+
+  - name: 'slo-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#harborhook-slo'
+        color: 'warning'
+        title: 'Harbor Hook SLO Alert'
+        text: |
+          {{ range .Alerts }}
+          *SLO Burn Rate Alert*
+          *Current Error Budget:* {{ .Annotations.error_budget }}%
+          *Burn Rate:* {{ .Annotations.burn_rate }}x
+          *Time to SLO Breach:* {{ .Annotations.time_to_breach }}
+          {{ end }}
+        send_resolved: true
+
+  - name: 'system-alerts'
+    webhook_configs:
+      - url: 'http://fake-receiver:8081/webhook'
+        send_resolved: true
+    email_configs:
+      - to: 'ops@example.com'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'tenant_id']

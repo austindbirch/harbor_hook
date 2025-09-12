@@ -17,7 +17,10 @@ import (
 
 	"github.com/austindbirch/harbor_hook/internal/delivery"
 	"github.com/austindbirch/harbor_hook/internal/metrics"
+	"github.com/austindbirch/harbor_hook/internal/tracing"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
+
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -142,9 +145,19 @@ func (s *Server) CreateSubscription(ctx context.Context, req *webhookv1.CreateSu
 
 // Publish event publishes an arbitrary JSON payload to all subscribed endpoints
 func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRequest) (*webhookv1.PublishEventResponse, error) {
+	// Start tracing span
+	ctx, span := tracing.StartSpan(ctx, "ingest.PublishEvent",
+		attribute.String("tenant_id", req.GetTenantId()),
+		attribute.String("event_type", req.GetEventType()),
+		attribute.String("idempotency_key", req.GetIdempotencyKey()),
+	)
+	defer span.End()
+
 	// Ensure required fields are present
 	if req.GetTenantId() == "" || req.GetEventType() == "" || req.GetPayload() == nil {
-		return nil, errors.New("tenant_id, event_type, and payload are required")
+		err := errors.New("tenant_id, event_type, and payload are required")
+		tracing.SetSpanError(ctx, err)
+		return nil, err
 	}
 
 	// Insert event
@@ -160,6 +173,7 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 	// Try insert; if conflict on idempotency, fetch existing id and DO NOT fanout
 	if req.GetIdempotencyKey() != "" {
 		// 1) Insert-or-ignore (no RETURNING here)
+		tracing.AddSpanEvent(ctx, "db.insert_event_idempotent")
 		ct, err := s.pool.Exec(ctx, `
 			INSERT INTO harborhook.events(tenant_id, event_type, payload, idempotency_key)
 			VALUES ($1, $2, $3::jsonb, $4)
@@ -167,30 +181,37 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 			req.GetTenantId(), req.GetEventType(), string(payloadJSON), req.GetIdempotencyKey(),
 		)
 		if err != nil {
+			tracing.SetSpanError(ctx, err)
 			return nil, fmt.Errorf("insert events (idempotent): %w", err)
 		}
 
 		// 2) Fetch the event id whether inserted now or already existed
+		tracing.AddSpanEvent(ctx, "db.select_event_id")
 		if err := s.pool.QueryRow(ctx, `
 			SELECT id FROM harborhook.events
 		 	WHERE tenant_id = $1 AND idempotency_key = $2
 		 	LIMIT 1`,
 			req.GetTenantId(), req.GetIdempotencyKey(),
 		).Scan(&eventID); err != nil {
+			tracing.SetSpanError(ctx, err)
 			return nil, fmt.Errorf("select event id (idempotent): %w", err)
 		}
 
 		// 3) If we did NOT insert now (rows affected == 0), check if deliveries already exist.
 		//    If they do, treat as duplicate publish → no fanout.
 		if ct.RowsAffected() == 0 {
+			tracing.AddSpanEvent(ctx, "db.check_duplicate_deliveries")
 			var existingCount int
 			if err := s.pool.QueryRow(ctx, `
 				SELECT COUNT(*) FROM harborhook.deliveries WHERE event_id = $1`,
 				eventID,
 			).Scan(&existingCount); err != nil {
+				tracing.SetSpanError(ctx, err)
 				return nil, fmt.Errorf("count existing deliveries: %w", err)
 			}
 			if existingCount > 0 {
+				tracing.AddSpanEvent(ctx, "duplicate_event_detected")
+				span.SetAttributes(attribute.String("event_id", eventID))
 				return &webhookv1.PublishEventResponse{
 					EventId:     eventID,
 					FanoutCount: 0,
@@ -199,17 +220,23 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 		}
 	} else {
 		// No idempotency key → always create a new event
+		tracing.AddSpanEvent(ctx, "db.insert_event_new")
 		if err := s.pool.QueryRow(ctx, `
 			INSERT INTO harborhook.events(tenant_id, event_type, payload)
 			VALUES ($1, $2, $3::jsonb)
 			RETURNING id`,
 			req.GetTenantId(), req.GetEventType(), string(payloadJSON),
 		).Scan(&eventID); err != nil {
+			tracing.SetSpanError(ctx, err)
 			return nil, fmt.Errorf("insert events (no-idem): %w", err)
 		}
 	}
+	
+	// Add event ID to span attributes
+	span.SetAttributes(attribute.String("event_id", eventID))
 
 	// Fetch subscribers + insert deliveries (pending), then enqueue
+	tracing.AddSpanEvent(ctx, "db.query_subscribers")
 	type subRow struct {
 		EndpointID string
 		URL        string
@@ -222,6 +249,7 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 		req.GetTenantId(), req.GetEventType(),
 	)
 	if err != nil {
+		tracing.SetSpanError(ctx, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -242,37 +270,60 @@ func (s *Server) PublishEvent(ctx context.Context, req *webhookv1.PublishEventRe
 			eventID, r.EndpointID)
 	}
 	if err := rows.Err(); err != nil {
+		tracing.SetSpanError(ctx, err)
 		return nil, err
 	}
 
-	br := s.pool.SendBatch(ctx, batch)
-	defer br.Close()
+	// Add subscriber count to tracing
+	span.SetAttributes(attribute.Int("subscribers_count", len(targets)))
+	
+	if len(targets) > 0 {
+		tracing.AddSpanEvent(ctx, "db.create_deliveries_batch", attribute.Int("delivery_count", len(targets)))
+		br := s.pool.SendBatch(ctx, batch)
+		defer br.Close()
 
-	for _, t := range targets {
-		var deliveryID string
-		if err := br.QueryRow().Scan(&deliveryID); err != nil {
-			return nil, err
+		// Extract trace headers for NSQ propagation
+		traceHeaders := tracing.PropagateTraceToNSQ(ctx)
+		
+		for _, t := range targets {
+			var deliveryID string
+			if err := br.QueryRow().Scan(&deliveryID); err != nil {
+				tracing.SetSpanError(ctx, err)
+				return nil, err
+			}
+			task := delivery.Task{
+				DeliveryID:   deliveryID,
+				EventID:      eventID,
+				TenantID:     req.GetTenantId(),
+				EndpointID:   t.EndpointID,
+				EndpointURL:  t.URL,
+				EventType:    req.GetEventType(),
+				Payload:      payloadMap,
+				Attempt:      0,
+				PublishedAt:  time.Now().UTC().Format(time.RFC3339),
+				TraceHeaders: traceHeaders,
+			}
+			b, _ := json.Marshal(task)
+			if err := s.prod.Publish(deliveriesTopic, b); err != nil {
+				tracing.SetSpanError(ctx, err)
+				return nil, fmt.Errorf("nsq publish: %w", err)
+			}
+			fanout++
 		}
-		task := delivery.Task{
-			DeliveryID:  deliveryID,
-			EventID:     eventID,
-			TenantID:    req.GetTenantId(),
-			EndpointID:  t.EndpointID,
-			EndpointURL: t.URL,
-			EventType:   req.GetEventType(),
-			Payload:     payloadMap,
-			Attempt:     0,
-			PublishedAt: time.Now().UTC().Format(time.RFC3339),
-		}
-		b, _ := json.Marshal(task)
-		if err := s.prod.Publish(deliveriesTopic, b); err != nil {
-			return nil, fmt.Errorf("nsq publish: %w", err)
-		}
-		fanout++
+		
+		tracing.AddSpanEvent(ctx, "nsq.published_tasks", 
+			attribute.Int("task_count", int(fanout)),
+			attribute.String("topic", deliveriesTopic))
 	}
 
-	// Increment Prometheus counter
-	metrics.EventsPublishedTotal.Inc()
+	// Increment Prometheus counter with tenant_id label
+	metrics.RecordEventPublished(req.GetTenantId())
+
+	// Add final span attributes
+	span.SetAttributes(
+		attribute.Int("fanout_count", int(fanout)),
+		attribute.Bool("has_idempotency_key", req.GetIdempotencyKey() != ""),
+	)
 
 	// Return API response
 	return &webhookv1.PublishEventResponse{

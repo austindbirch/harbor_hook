@@ -26,6 +26,7 @@ var (
 	reqCount       = atomic.Int64{}
 	endpointSecret = ""
 	maxSkew        = 5 * time.Minute
+	responseDelay  = 0 * time.Millisecond
 )
 
 func main() {
@@ -45,14 +46,27 @@ func main() {
 			maxSkew = time.Duration(n) * time.Second
 		}
 	}
+	// Parse response delay for load simulation
+	if v := os.Getenv("RESPONSE_DELAY_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			responseDelay = time.Duration(n) * time.Millisecond
+		}
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"ok":true}`)) })
 	mux.HandleFunc("/hook", handleHook)
 
 	addr := ":8081"
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 	log.Printf("fake-receiver listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(server.ListenAndServe())
 }
 
 func handleHook(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +87,11 @@ func handleHook(w http.ResponseWriter, r *http.Request) {
 		log.Printf("FAILING (%d/%d) %s headers=%d body=%s", n, failFirstN, r.URL.Path, len(r.Header), truncate(string(b), 160))
 		http.Error(w, "temporary failure", http.StatusInternalServerError)
 		return
+	}
+
+	// Simulate processing delay if configured
+	if responseDelay > 0 {
+		time.Sleep(responseDelay)
 	}
 
 	log.Printf("fake-receiver OK %s  headers=%d body=%q", r.URL.Path, len(r.Header), truncate(string(b), 160))

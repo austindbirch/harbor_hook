@@ -17,3 +17,13 @@ protogen/
 # Docker
 deploy/docker/postgres/data/
 deploy/docker/prometheus/data/
+deploy/docker/tempo/data/
+deploy/docker/loki/data/
+deploy/docker/alertmanager/data/
+
+# Build targets
+fake-receiver
+harborctl
+ingest
+jwks-server
+worker

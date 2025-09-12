@@ -7,7 +7,7 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags="-w -s -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.Version=$(VERSION) -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.GitCommit=$(GIT_COMMIT) -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.BuildTime=$(BUILD_TIME)"
 
-.PHONY: proto build build-cli install-cli uninstall-cli lint up up-fast down down-clean logs logs-gateway clean clean-all tidy test-cli certs demo-gateway token help
+.PHONY: proto build build-cli install-cli uninstall-cli lint up up-fast down down-clean logs logs-gateway logs-obs clean clean-all tidy test-cli certs demo-gateway token help
 
 proto:
 	@echo "Generating protos with buf..."
@@ -87,12 +87,17 @@ token:
 
 logs:
 	@echo "Viewing docker logs..."
-	$(COMPOSE) logs -f ingest worker envoy jwks-server
+	$(COMPOSE) logs -f ingest worker fake-receiver
 
 # View logs for gateway services only
 logs-gateway:
 	@echo "Viewing gateway logs..."
 	$(COMPOSE) logs -f envoy jwks-server
+
+# View logs for observability services only
+logs-obs:
+	@echo "Viewing observability logs..."
+	$(COMPOSE) logs -f prometheus grafana tempo loki promtail
 
 # Enhanced clean - more aggressive cleanup
 clean-all:

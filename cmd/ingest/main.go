@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -20,9 +19,12 @@ import (
 	"github.com/austindbirch/harbor_hook/internal/db"
 	"github.com/austindbirch/harbor_hook/internal/health"
 	"github.com/austindbirch/harbor_hook/internal/ingest"
+	"github.com/austindbirch/harbor_hook/internal/logging"
 	"github.com/austindbirch/harbor_hook/internal/metrics"
+	"github.com/austindbirch/harbor_hook/internal/tracing"
 	webhookv1 "github.com/austindbirch/harbor_hook/protogen/go/api/webhook/v1"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,10 +36,20 @@ func main() {
 	cfg := config.FromEnv()
 	ctx := context.Background()
 
+	// Initialize structured logging
+	logger := logging.New("harborhook-ingest")
+
+	// Initialize OpenTelemetry tracing
+	shutdown, err := tracing.InitTracing(ctx, "harborhook-ingest")
+	if err != nil {
+		logger.Plain().WithError(err).Fatal("Failed to initialize tracing")
+	}
+	defer shutdown()
+
 	// DB connect
 	pool, err := db.Connect(ctx, cfg.DSN())
 	if err != nil {
-		log.Fatalf("db connect: %v", err)
+		logger.Plain().WithError(err).Fatal("db connect failed")
 	}
 	defer pool.Close()
 
@@ -45,7 +57,7 @@ func main() {
 	nsqConf := nsq.NewConfig()
 	prod, err := nsq.NewProducer(cfg.NSQ.NsqdTCPAddr, nsqConf)
 	if err != nil {
-		log.Fatalf("nsq producer: %v", err)
+		logger.Plain().WithError(err).Fatal("nsq producer creation failed")
 	}
 	defer prod.Stop()
 
@@ -53,19 +65,24 @@ func main() {
 	var grpcOpts []grpc.ServerOption
 	var httpTLSConfig *tls.Config
 
+	// Add OpenTelemetry gRPC stats handler
+	grpcOpts = append(grpcOpts,
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
+
 	if enableTLS := os.Getenv("ENABLE_TLS"); enableTLS == "true" {
 		certFile := os.Getenv("TLS_CERT_PATH")
 		keyFile := os.Getenv("TLS_KEY_PATH")
 		caFile := os.Getenv("CA_CERT_PATH")
 
 		if certFile == "" || keyFile == "" {
-			log.Fatal("TLS enabled but cert/key paths not provided")
+			logger.Plain().Fatal("TLS enabled but cert/key paths not provided")
 		}
 
 		// Load server certificate
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			log.Fatalf("Failed to load server certificate: %v", err)
+			logger.Plain().WithError(err).Fatal("Failed to load server certificate")
 		}
 
 		// Setup TLS config
@@ -78,11 +95,11 @@ func main() {
 		if caFile != "" {
 			caCert, err := os.ReadFile(caFile)
 			if err != nil {
-				log.Fatalf("Failed to read CA certificate: %v", err)
+				logger.Plain().WithError(err).Fatal("Failed to read CA certificate")
 			}
 			caCertPool := x509.NewCertPool()
 			if !caCertPool.AppendCertsFromPEM(caCert) {
-				log.Fatal("Failed to append CA certificate")
+				logger.Plain().Fatal("Failed to append CA certificate")
 			}
 			tlsConfig.ClientCAs = caCertPool
 		}
@@ -105,7 +122,10 @@ func main() {
 
 		// For development, we'll skip JWT validation as Envoy handles it
 		// TODO: implement JWT validation in the service as well as the HTTP edge
-		log.Printf("JWT validation configured for issuer: %s, audience: %s (handled by Envoy)", jwtIssuer, jwtAudience)
+		logger.Plain().WithFields(map[string]any{
+			"issuer":   jwtIssuer,
+			"audience": jwtAudience,
+		}).Info("JWT validation configured (handled by Envoy)")
 	}
 
 	// Start gRPC server
@@ -118,12 +138,15 @@ func main() {
 
 	lis, err := net.Listen("tcp", cfg.GRPCPort)
 	if err != nil {
-		log.Fatalf("gRPC listen: %v", err)
+		logger.Plain().WithError(err).Fatal("gRPC listen failed")
 	}
 	go func() {
-		log.Printf("ingest gRPC listening on %s (TLS: %v)", cfg.GRPCPort, httpTLSConfig != nil)
+		logger.Plain().WithFields(map[string]any{
+			"port": cfg.GRPCPort,
+			"tls":  httpTLSConfig != nil,
+		}).Info("ingest gRPC server starting")
 		if err := grpcSrv.Serve(lis); err != nil {
-			log.Fatalf("gRPC serve: %v", err)
+			logger.Plain().WithError(err).Fatal("gRPC serve failed")
 		}
 	}()
 
@@ -149,7 +172,7 @@ func main() {
 	}
 
 	if err := webhookv1.RegisterWebhookServiceHandlerFromEndpoint(ctx, gwmux, "localhost"+cfg.GRPCPort, dialOpts); err != nil {
-		log.Fatalf("Err in registering service handler for grpc-gateway: %v", err)
+		logger.Plain().WithError(err).Fatal("Failed to register service handler for grpc-gateway")
 	}
 	mux.Handle("/", gwmux)
 
@@ -161,7 +184,10 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("ingest HTTP listening on %s (TLS: %v)", cfg.HTTPPort, httpTLSConfig != nil)
+		logger.Plain().WithFields(map[string]any{
+			"port": cfg.HTTPPort,
+			"tls":  httpTLSConfig != nil,
+		}).Info("ingest HTTP server starting")
 		var err error
 		if httpTLSConfig != nil {
 			err = httpSrv.ListenAndServeTLS("", "") // Cert/key already in TLSConfig
@@ -169,7 +195,7 @@ func main() {
 			err = httpSrv.ListenAndServe()
 		}
 		if err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP serve: %v", err)
+			logger.Plain().WithError(err).Fatal("HTTP serve failed")
 		}
 	}()
 
@@ -177,7 +203,9 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 	<-stop
+	
+	logger.Plain().Info("Shutting down ingest service")
 	grpcSrv.GracefulStop()
 	_ = httpSrv.Shutdown(context.Background())
-	log.Println("ingest stopped")
+	logger.Plain().Info("ingest service stopped")
 }
