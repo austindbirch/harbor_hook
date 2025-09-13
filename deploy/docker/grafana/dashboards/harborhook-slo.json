@@ -84,7 +84,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  rate(harborhook_deliveries_total{status=\"delivered\"}[1h]) /\n  (rate(harborhook_deliveries_total{status=\"delivered\"}[1h]) + rate(harborhook_deliveries_total{status=\"failed\"}[1h]))\n) * 100",
+          "expr": "(\n  sum(rate(harborhook_deliveries_total{status=\"delivered\"}[1h])) /\n  (sum(rate(harborhook_deliveries_total{status=\"delivered\"}[1h])) + sum(rate(harborhook_deliveries_total{status=\"failed\"}[1h])))\n) * 100",
           "interval": "",
           "legendFormat": "1h SLO",
           "refId": "A"
@@ -155,7 +155,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  rate(harborhook_deliveries_total{status=\"delivered\"}[24h]) /\n  (rate(harborhook_deliveries_total{status=\"delivered\"}[24h]) + rate(harborhook_deliveries_total{status=\"failed\"}[24h]))\n) * 100",
+          "expr": "(\n  sum(rate(harborhook_deliveries_total{status=\"delivered\"}[24h])) /\n  (sum(rate(harborhook_deliveries_total{status=\"delivered\"}[24h])) + sum(rate(harborhook_deliveries_total{status=\"failed\"}[24h])))\n) * 100",
           "interval": "",
           "legendFormat": "24h SLO",
           "refId": "A"
@@ -226,7 +226,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  rate(harborhook_deliveries_total{status=\"delivered\"}[7d]) /\n  (rate(harborhook_deliveries_total{status=\"delivered\"}[7d]) + rate(harborhook_deliveries_total{status=\"failed\"}[7d]))\n) * 100",
+          "expr": "(\n  sum(rate(harborhook_deliveries_total{status=\"delivered\"}[7d])) /\n  (sum(rate(harborhook_deliveries_total{status=\"delivered\"}[7d])) + sum(rate(harborhook_deliveries_total{status=\"failed\"}[7d])))\n) * 100",
           "interval": "",
           "legendFormat": "7d SLO",
           "refId": "A"
@@ -297,7 +297,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  1 - (\n    (99.9 - (\n      rate(harborhook_deliveries_total{status=\"delivered\"}[24h]) /\n      (rate(harborhook_deliveries_total{status=\"delivered\"}[24h]) + rate(harborhook_deliveries_total{status=\"failed\"}[24h])) * 100\n    )) / (100 - 99.9)\n  )\n) * 100",
+          "expr": "(\n  1 - (\n    (99.9 - (\n      sum(rate(harborhook_deliveries_total{status=\"delivered\"}[24h])) /\n      (sum(rate(harborhook_deliveries_total{status=\"delivered\"}[24h])) + sum(rate(harborhook_deliveries_total{status=\"failed\"}[24h]))) * 100\n    )) / (100 - 99.9)\n  )\n) * 100",
           "interval": "",
           "legendFormat": "Error Budget Remaining",
           "refId": "A"
@@ -368,7 +368,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.99, rate(harborhook_delivery_latency_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, sum(rate(harborhook_delivery_latency_seconds_bucket[5m])) by (le))",
           "interval": "",
           "legendFormat": "P99 Latency",
           "refId": "A"
@@ -461,7 +461,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  rate(harborhook_deliveries_total{status=\"delivered\"}[5m]) /\n  (rate(harborhook_deliveries_total{status=\"delivered\"}[5m]) + rate(harborhook_deliveries_total{status=\"failed\"}[5m]))\n) * 100",
+          "expr": "(\n  sum(rate(harborhook_deliveries_total{status=\"delivered\"}[5m])) /\n  (sum(rate(harborhook_deliveries_total{status=\"delivered\"}[5m])) + sum(rate(harborhook_deliveries_total{status=\"failed\"}[5m])))\n) * 100",
           "interval": "",
           "legendFormat": "Availability %",
           "refId": "A"
@@ -552,7 +552,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total{status=\"failed\"}[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total{status=\"failed\"}[5m])) by (tenant_id)",
           "interval": "",
           "legendFormat": "Failures: {{tenant_id}}",
           "refId": "A"
@@ -623,7 +623,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  rate(harborhook_deliveries_total{status=\"failed\"}[1h]) /\n  rate(harborhook_deliveries_total[1h])\n) / 0.001",
+          "expr": "(\n  sum(rate(harborhook_deliveries_total{status=\"failed\"}[1h])) /\n  sum(rate(harborhook_deliveries_total[1h]))\n) / 0.001",
           "interval": "",
           "legendFormat": "Burn Rate (1h)",
           "refId": "A"

@@ -27,3 +27,7 @@ harborctl
 ingest
 jwks-server
 worker
+
+# Claude
+.claude/
+CLAUDE.md

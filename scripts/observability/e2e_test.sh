@@ -243,7 +243,7 @@ test_log_aggregation() {
     print_test "Testing log ingestion and query"
     local now=$(date +%s)000000000  # nanoseconds
     local five_min_ago=$(( $(date -v-5M +%s) ))000000000
-    local log_query='{job=~".*"}'
+    local log_query='{resource.service.name=~".*"}'
     local logs_response=$(curl -s "$LOKI_URL/loki/api/v1/query_range?query=$log_query&start=$five_min_ago&end=$now&limit=10" 2>/dev/null || echo '{}')
     local log_count=$(echo "$logs_response" | jq -r '.data.result | length' 2>/dev/null || echo "0")
     

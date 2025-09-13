@@ -259,7 +259,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_http_deliveries_total[5m])",
+          "expr": "sum(rate(harborhook_http_delivery_duration_seconds_count[5m])) by (status_code)",
           "interval": "",
           "legendFormat": "{{status_code}}",
           "refId": "A"
@@ -377,7 +377,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "harborhook_worker_backlog",
+          "expr": "harborhook_worker_backlog{job=\"worker\"}",
           "interval": "",
           "legendFormat": "Queue Depth",
           "refId": "A"
@@ -387,7 +387,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total[5m]))",
           "interval": "",
           "legendFormat": "Processing Rate",
           "refId": "B"
@@ -567,7 +567,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total{status=\"delivered\",tenant_id=\"$tenant\"}[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total{status=\"delivered\",tenant_id=~\"$tenant\"}[5m])) by (tenant_id)",
           "interval": "",
           "legendFormat": "Delivered: {{tenant_id}}",
           "refId": "A"
@@ -577,13 +577,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total{status=\"failed\",tenant_id=\"$tenant\"}[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total{status=\"failed\",tenant_id=~\"$tenant\"}[5m])) by (tenant_id)",
           "interval": "",
           "legendFormat": "Failed: {{tenant_id}}",
           "refId": "B"
         }
       ],
-      "title": "Per-Tenant Performance",
+      "title": "Performance by Tenant",
       "type": "timeseries"
     },
     {
@@ -667,13 +667,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.99, rate(harborhook_http_delivery_latency_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, sum(rate(harborhook_http_delivery_duration_seconds_bucket[5m])) by (le, endpoint_id))",
           "interval": "",
-          "legendFormat": "P99 by Endpoint: {{endpoint_id}}",
+          "legendFormat": "Endpoint: {{endpoint_id}}",
           "refId": "A"
         }
       ],
-      "title": "Per-Endpoint Latency",
+      "title": "P99 Latency by Endpoint",
       "type": "timeseries"
     },
     {

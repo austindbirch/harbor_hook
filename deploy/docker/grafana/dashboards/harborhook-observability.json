@@ -51,23 +51,14 @@
         "y": 0
       },
       "id": 1,
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      },
+      "options": {},
       "targets": [
         {
           "datasource": {
             "type": "tempo",
             "uid": "P214B5B846CF3925F"
           },
-          "expr": "{service.name=\"harborhook-ingest\" || service.name=\"harborhook-worker\"}",
+          "query": "{ resource.service.name = \"harborhook-ingest\" }",
           "refId": "A"
         }
       ],
@@ -103,7 +94,7 @@
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "expr": "{service=~\"harborhook-.*\"} | json | trace_id != \"\"",
+          "expr": "{service_name=~\"/hh-(ingest|worker)\"} | json | trace_id != \"\"",
           "refId": "A"
         }
       ],
@@ -139,7 +130,7 @@
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "expr": "{service=~\"harborhook-.*\"} | json | trace_id=\"$trace_id\"",
+          "expr": "{service_name=~\"/hh-(ingest|worker)\"} | json | trace_id=\"$trace_id\"",
           "refId": "A"
         }
       ],
@@ -200,7 +191,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_events_published_total[5m])",
+          "expr": "sum(rate(harborhook_events_published_total[5m]))",
           "interval": "",
           "legendFormat": "Events Published",
           "refId": "A"
@@ -210,7 +201,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total[5m]))",
           "interval": "",
           "legendFormat": "Deliveries Processed",
           "refId": "B"
@@ -248,7 +239,7 @@
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "expr": "{service=~\"harborhook-.*\"} | json | level=\"error\"",
+          "expr": "{service_name=~\"/hh-(ingest|worker)\"} | json | level=\"error\"",
           "refId": "A"
         }
       ],
@@ -284,7 +275,7 @@
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "expr": "{service=\"harborhook-worker\"} | json | delivery_id != \"\" | line_format \"{{.msg}} [delivery={{.delivery_id}}, trace={{.trace_id}}]\"",
+          "expr": "{service_name=\"/hh-worker\"} | json | delivery_id != \"\" | line_format \"{{.msg}} [delivery={{.delivery_id}}, trace={{.trace_id}}]\"",
           "refId": "A"
         }
       ],
@@ -410,12 +401,12 @@
         "multi": false,
         "name": "trace_id",
         "options": [],
-        "query": "label_values({service=~\"harborhook-.*\"} | json, trace_id)",
-        "refresh": 2,
+        "query": "",
+        "refresh": 0,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
+        "sort": 0,
+        "type": "textbox"
       },
       {
         "current": {

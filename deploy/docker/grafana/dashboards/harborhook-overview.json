@@ -104,9 +104,9 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_events_published_total[5m])",
+          "expr": "sum(rate(harborhook_events_published_total[5m]))",
           "interval": "",
-          "legendFormat": "Events Published/sec",
+          "legendFormat": "Events Published",
           "refId": "A"
         },
         {
@@ -114,9 +114,9 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total{status=\"delivered\"}[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total{status=\"delivered\"}[5m]))",
           "interval": "",
-          "legendFormat": "Deliveries Succeeded/sec",
+          "legendFormat": "Successful Deliveries",
           "refId": "B"
         },
         {
@@ -124,13 +124,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_deliveries_total{status=\"failed\"}[5m])",
+          "expr": "sum(rate(harborhook_deliveries_total{status=\"failed\"}[5m]))",
           "interval": "",
-          "legendFormat": "Deliveries Failed/sec",
+          "legendFormat": "Failed Deliveries",
           "refId": "C"
         }
       ],
-      "title": "System Throughput",
+      "title": "System Throughput /sec",
       "type": "timeseries"
     },
     {
@@ -195,7 +195,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "(\n  rate(harborhook_deliveries_total{status=\"delivered\"}[5m]) /\n  (rate(harborhook_deliveries_total{status=\"delivered\"}[5m]) + rate(harborhook_deliveries_total{status=\"failed\"}[5m]))\n) * 100",
+          "expr": "(\n  sum(harborhook_deliveries_total{status=\"delivered\"}) /\n  (sum(harborhook_deliveries_total{status=\"delivered\"}) + sum(harborhook_deliveries_total{status=\"failed\"}))\n) * 100",
           "interval": "",
           "legendFormat": "Success Rate %",
           "refId": "A"
@@ -266,7 +266,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "harborhook_worker_backlog",
+          "expr": "harborhook_worker_backlog{job=\"worker\"}",
           "interval": "",
           "legendFormat": "Backlog Depth",
           "refId": "A"
@@ -359,11 +359,11 @@
           },
           "expr": "histogram_quantile(0.99, rate(harborhook_delivery_latency_seconds_bucket[5m]))",
           "interval": "",
-          "legendFormat": "P99 Latency by Tenant: {{tenant_id}}",
+          "legendFormat": "Tenant: {{tenant_id}}",
           "refId": "A"
         }
       ],
-      "title": "P99 Delivery Latency",
+      "title": "P99 Delivery Latency per Tenant",
       "type": "timeseries"
     },
     {
@@ -450,11 +450,11 @@
           },
           "expr": "rate(harborhook_dlq_total[5m])",
           "interval": "",
-          "legendFormat": "DLQ Rate: {{reason}}",
+          "legendFormat": "Reason: {{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Dead Letter Queue",
+      "title": "Dead Letter Queue Throughput by Reason",
       "type": "timeseries"
     },
     {
@@ -513,7 +513,7 @@
           },
           "expr": "rate(harborhook_retries_total[5m])",
           "interval": "",
-          "legendFormat": "{{reason}}",
+          "legendFormat": "DLQ Reason: {{reason}}",
           "refId": "A"
         }
       ],
