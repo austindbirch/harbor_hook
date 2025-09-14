@@ -45,7 +45,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 14,
         "w": 24,
         "x": 0,
         "y": 0
@@ -58,7 +58,7 @@
             "type": "tempo",
             "uid": "P214B5B846CF3925F"
           },
-          "query": "{ resource.service.name = \"harborhook-ingest\" }",
+          "query": "$trace_id",
           "refId": "A"
         }
       ],
@@ -75,7 +75,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 14
       },
       "id": 2,
       "options": {
@@ -111,7 +111,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 14
       },
       "id": 3,
       "options": {
@@ -164,7 +164,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 23
       },
       "id": 4,
       "options": {
@@ -220,7 +220,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 23
       },
       "id": 5,
       "options": {
@@ -256,7 +256,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 27
+        "y": 32
       },
       "id": 6,
       "options": {
@@ -343,7 +343,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 27
+        "y": 32
       },
       "id": 7,
       "options": {
@@ -363,7 +363,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum by (status) (rate(harborhook_deliveries_total{tenant_id=\"$tenant\"}[5m]))",
+          "expr": "sum by (status) (rate(harborhook_deliveries_total{tenant_id=~\"(e2e_test|observability_demo)\"}[5m]))",
           "interval": "",
           "legendFormat": "{{status}} deliveries/sec",
           "refId": "A"

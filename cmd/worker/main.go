@@ -383,6 +383,12 @@ func main() {
 			"attempt": newAttempt,
 			"delay":   delay.String(),
 		}).Info("requeue delivery")
+		
+		// Update task attempt count before requeuing
+		t.Attempt = newAttempt
+		updatedBody, _ := json.Marshal(t)
+		m.Body = updatedBody
+		
 		m.Requeue(delay) // explicit requeue with delay
 		return nil
 	}))

@@ -71,8 +71,9 @@ pct() {
 print_header "🔭 Harbor Hook Observability Demo (Phase 5)"
 echo "This demo will:"
 echo "• Generate high-volume traffic (success & failure scenarios)"
+echo "• Create dead endpoints for fast DLQ testing (1-2 min vs 15 min)"
 echo "• Demonstrate distributed tracing across services"
-echo "• Trigger and resolve alerts based on SLO violations"  
+echo "• Trigger and resolve alerts based on SLO violations"
 echo "• Show correlation between metrics, traces, and logs in Grafana"
 echo ""
 echo "Demo Configuration:"
@@ -225,6 +226,63 @@ generate_background_traffic() {
     } > "$COUNTS_FILE"
 }
 
+# Generate DLQ traffic - force messages to dead letter queue quickly
+generate_dlq_traffic() {
+    print_header "💀 Generating DLQ Traffic (Fast Failures)"
+    print_step "Creating endpoints that will fail immediately to force DLQ scenarios..."
+
+    local harborctl="./bin/harborctl"
+
+    # Create endpoints that will always fail (dead/unreachable URLs)
+    print_step "Creating dead endpoints..."
+    local dead_url_1="http://nonexistent-service:9999/webhook"
+    local dead_url_2="http://fake-receiver:8081/dead-endpoint"  # fake-receiver returns 404 for unknown paths
+    local dead_url_3="http://timeout-service:8082/slow"         # non-existent service
+
+    local dead_resp_1=$($harborctl endpoint create "$TENANT_ID" "$dead_url_1" --secret "$FAKE_SECRET" --server "$SERVER_HOST" --json)
+    local dead_endpoint_1=$(echo "$dead_resp_1" | jq -r '.endpoint.id')
+
+    local dead_resp_2=$($harborctl endpoint create "$TENANT_ID" "$dead_url_2" --secret "$FAKE_SECRET" --server "$SERVER_HOST" --json)
+    local dead_endpoint_2=$(echo "$dead_resp_2" | jq -r '.endpoint.id')
+
+    local dead_resp_3=$($harborctl endpoint create "$TENANT_ID" "$dead_url_3" --secret "$FAKE_SECRET" --server "$SERVER_HOST" --json)
+    local dead_endpoint_3=$(echo "$dead_resp_3" | jq -r '.endpoint.id')
+
+    print_success "Dead endpoints created: $dead_endpoint_1, $dead_endpoint_2, $dead_endpoint_3"
+
+    # Create subscriptions for these dead endpoints
+    print_step "Creating subscriptions for dead endpoints..."
+    local dead_sub_1=$($harborctl subscription create "$TENANT_ID" "$dead_endpoint_1" "${EVENT_TYPE}.dlq_test" --server "$SERVER_HOST" --json)
+    local dead_sub_2=$($harborctl subscription create "$TENANT_ID" "$dead_endpoint_2" "${EVENT_TYPE}.dlq_test" --server "$SERVER_HOST" --json)
+    local dead_sub_3=$($harborctl subscription create "$TENANT_ID" "$dead_endpoint_3" "${EVENT_TYPE}.dlq_test" --server "$SERVER_HOST" --json)
+
+    print_success "Dead subscriptions created"
+
+    # Generate events that will immediately fail and go to DLQ
+    print_step "Publishing events to dead endpoints (these will fail fast and hit DLQ)..."
+    local dlq_count=0
+    local dlq_events=30  # Generate 30 events that will fail quickly
+
+    for i in $(seq 1 $dlq_events); do
+        local payload="{\"demo\": true, \"type\": \"dlq_test\", \"attempt\": $i, \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"expected_outcome\": \"DLQ\", \"reason\": \"dead_endpoint_test\"}"
+        $harborctl event publish "$TENANT_ID" "${EVENT_TYPE}.dlq_test" "$payload" --server "$SERVER_HOST" --json > /dev/null 2>&1 || true
+        dlq_count=$((dlq_count + 1))
+
+        # Progress indicator
+        if [ $((dlq_count % 10)) -eq 0 ]; then
+            echo -n "💀"
+        fi
+
+        # Small delay to avoid overwhelming the system
+        sleep 0.1
+    done
+
+    echo ""
+    print_success "Generated $dlq_count events destined for DLQ (dead endpoints)"
+    print_warning "These events will fail quickly and move to DLQ within 1-2 minutes instead of 15 minutes"
+    print_info "Monitor NSQ admin at http://localhost:4171 to see DLQ message counts"
+}
+
 # Generate burst traffic to trigger alerts
 generate_burst_traffic() {
     print_header "🚨 Generating Burst Traffic (Alert Trigger)"
@@ -269,26 +327,69 @@ generate_burst_traffic() {
 # Demonstrate trace correlation
 demonstrate_traces() {
     print_header "🔍 Demonstrating Distributed Tracing"
-    print_step "Publishing events with trace correlation IDs..."
+    print_step "Finding real trace ID from recent traces..."
     
     local harborctl="./bin/harborctl"
-    local trace_id="trace-$(date +%s)-$RANDOM"
     
-    # Publish correlated events
-    for i in {1..5}; do
-        local span_id="span-${i}"
-        local payload="{\"demo\": true, \"type\": \"traced_event\", \"trace_id\": \"$trace_id\", \"span_id\": \"$span_id\", \"step\": $i, \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+    # Get a real trace ID from recent logs or tempo
+    local real_trace_id
+    local start_time=$(( ($(date +%s) - 300) * 1000000000 ))
+    local end_time=$(( $(date +%s) * 1000000000 ))
+    real_trace_id=$(curl -s "http://localhost:3100/loki/api/v1/query_range?query=%7Bservice_name%3D~%22%2Fhh-%28ingest%7Cworker%29%22%7D%20%7C%20json%20%7C%20trace_id%20!%3D%20%22%22&start=${start_time}&end=${end_time}&limit=1" 2>/dev/null | jq -r '.data.result[0].values[0][1]' 2>/dev/null | jq -r '.trace_id' 2>/dev/null)
+    
+    # Fallback: try to get from Tempo
+    if [[ -z "$real_trace_id" || "$real_trace_id" == "null" || "$real_trace_id" == "" ]]; then
+        real_trace_id=$(curl -s 'http://localhost:3200/api/search?limit=1' 2>/dev/null | jq -r '.traces[0].traceID' 2>/dev/null)
+    fi
+    
+    # Final fallback: generate events first, then find the trace
+    if [[ -z "$real_trace_id" || "$real_trace_id" == "null" || "$real_trace_id" == "" ]]; then
+        print_step "No recent traces found. Publishing events first to generate traces..."
         
+        # Publish a few events to generate traces
+        for i in {1..3}; do
+            local payload="{\"demo\": true, \"type\": \"trace_generation\", \"step\": $i, \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+            $harborctl event publish "$TENANT_ID" "${EVENT_TYPE}.success" "$payload" --server "$SERVER_HOST" --json > /dev/null 2>&1 || true
+            sleep 1
+        done
+        
+        print_step "Waiting for traces to be processed..."
+        sleep 5
+        
+        # Try again to get a real trace ID
+        local retry_start_time=$(( ($(date +%s) - 60) * 1000000000 ))
+        local retry_end_time=$(( $(date +%s) * 1000000000 ))
+        real_trace_id=$(curl -s "http://localhost:3100/loki/api/v1/query_range?query=%7Bservice_name%3D~%22%2Fhh-%28ingest%7Cworker%29%22%7D%20%7C%20json%20%7C%20trace_id%20!%3D%20%22%22&start=${retry_start_time}&end=${retry_end_time}&limit=1" 2>/dev/null | jq -r '.data.result[0].values[0][1]' 2>/dev/null | jq -r '.trace_id' 2>/dev/null)
+    fi
+    
+    if [[ -n "$real_trace_id" && "$real_trace_id" != "null" && "$real_trace_id" != "" ]]; then
+        print_success "Found real trace ID from system: $real_trace_id"
+        print_info "🎯 Use this trace ID in Grafana's Observability Correlation dashboard:"
+        echo ""
+        echo -e "   Trace ID: ${GREEN}$real_trace_id${NC}"
+        echo ""
+        print_info "Steps to explore in Grafana:"
+        echo "1. Go to http://localhost:3000"
+        echo "2. Navigate to the 'Observability Correlation' dashboard"  
+        echo "3. Paste this trace ID: $real_trace_id"
+        echo "4. View correlated logs, traces, and metrics"
+    else
+        print_warning "Could not find any real trace IDs from the system"
+        print_info "Try running the demo again after some webhook traffic has been processed"
+    fi
+    
+    # Also publish some additional correlated events for demo purposes
+    print_step "Publishing additional demo events..."
+    for i in {1..3}; do
+        local payload="{\"demo\": true, \"type\": \"correlation_demo\", \"step\": $i, \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
         local event_resp
         event_resp=$($harborctl event publish "$TENANT_ID" "${EVENT_TYPE}.success" "$payload" --server "$SERVER_HOST" --json)
         local event_id
         event_id=$(echo "$event_resp" | jq -r '.eventId')
         
-        print_info "Published traced event $i/5: $event_id (trace: $trace_id)"
-        sleep 2
+        print_info "Published demo event $i/3: $event_id"
+        sleep 1
     done
-    
-    print_success "Trace correlation events published - check Tempo/Grafana for trace: $trace_id"
 }
 
 # Check alert status
@@ -416,20 +517,23 @@ main() {
     fi
     rm -f "$COUNTS_FILE" || true
     
-    # Phase 4: Demonstrate tracing
+    # Phase 4: Generate DLQ traffic for fast failures
+    generate_dlq_traffic
+
+    # Phase 5: Demonstrate tracing
     demonstrate_traces
-    
-    # Phase 5: Generate burst to trigger alerts
+
+    # Phase 6: Generate burst to trigger alerts
     generate_burst_traffic
-    
-    # Phase 6: Wait for metrics to propagate
+
+    # Phase 7: Wait for metrics to propagate
     print_step "Waiting for metrics and alerts to propagate..."
     sleep 30
     
-    # Phase 7: Check results
+    # Phase 8: Check results
     check_alerts
-    
-    # Phase 8: Show access information
+
+    # Phase 9: Show access information
     show_observability_urls
     
     # Final summary

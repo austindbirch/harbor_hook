@@ -66,7 +66,7 @@ up-fast:
 	@echo "✅ All containers started successfully!"
 
 # Clean shutdown without pruning (faster for quick restarts)
-down-clean:
+down-fast:
 	@echo "Stopping docker containers..."
 	$(COMPOSE) down -v --remove-orphans
 	@echo "✅ Containers stopped successfully!"
