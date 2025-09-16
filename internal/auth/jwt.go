@@ -223,11 +223,11 @@ func FetchJWKS(jwksURL string) (*rsa.PublicKey, error) {
 	}
 
 	// For simplicity, use the first key
-	// In production, you'd want to select by kid
+	// In production, we'd want to select by kid
 	_ = jwks.Keys[0]
 
 	// This is a simplified implementation
-	// In practice, you'd need to properly convert JWK to RSA public key
+	// In practice, we'd need to properly convert JWK to RSA public key
 	// For now, we'll return nil and expect the public key to be provided directly
 	return nil, fmt.Errorf("JWKS parsing not fully implemented - use direct public key")
 }
