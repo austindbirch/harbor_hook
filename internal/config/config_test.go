@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestGetenv(t *testing.T) {
@@ -87,16 +88,16 @@ func TestFromEnv(t *testing.T) {
 		{
 			name: "custom values from environment",
 			envVars: map[string]string{
-				"APP_NAME":              "test-app",
-				"HTTP_PORT":             ":3000",
-				"GRPC_PORT":             ":9000",
-				"DB_USER":               "testuser",
-				"DB_PASS":               "testpass",
-				"DB_HOST":               "testhost",
-				"DB_PORT":               "5433",
-				"DB_NAME":               "testdb",
-				"NSQD_TCP_ADDR":         "test-nsqd:4150",
-				"NSQ_LOOKUP_HTTP_ADDR":  "http://test-nsqlookupd:4161",
+				"APP_NAME":             "test-app",
+				"HTTP_PORT":            ":3000",
+				"GRPC_PORT":            ":9000",
+				"DB_USER":              "testuser",
+				"DB_PASS":              "testpass",
+				"DB_HOST":              "testhost",
+				"DB_PORT":              "5433",
+				"DB_NAME":              "testdb",
+				"NSQD_TCP_ADDR":        "test-nsqd:4150",
+				"NSQ_LOOKUP_HTTP_ADDR": "http://test-nsqlookupd:4161",
 			},
 			expected: Config{
 				AppName:  "test-app",
@@ -255,6 +256,365 @@ func TestConfig_DSN(t *testing.T) {
 			got := tt.config.DSN()
 			if got != tt.want {
 				t.Errorf("Config.DSN() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetenvInt(t *testing.T) {
+	// Save original environment
+	originalValue := os.Getenv("TEST_INT_VAR")
+	defer func() {
+		if originalValue == "" {
+			os.Unsetenv("TEST_INT_VAR")
+		} else {
+			os.Setenv("TEST_INT_VAR", originalValue)
+		}
+	}()
+
+	tests := []struct {
+		name     string
+		envVar   string
+		envValue string
+		def      int
+		expected int
+	}{
+		{
+			name:     "valid integer",
+			envVar:   "TEST_INT_VAR",
+			envValue: "42",
+			def:      10,
+			expected: 42,
+		},
+		{
+			name:     "invalid integer",
+			envVar:   "TEST_INT_VAR",
+			envValue: "not-an-int",
+			def:      10,
+			expected: 10,
+		},
+		{
+			name:     "empty string",
+			envVar:   "TEST_INT_VAR",
+			envValue: "",
+			def:      10,
+			expected: 10,
+		},
+		{
+			name:     "negative integer",
+			envVar:   "TEST_INT_VAR",
+			envValue: "-5",
+			def:      10,
+			expected: -5,
+		},
+		{
+			name:     "zero",
+			envVar:   "TEST_INT_VAR",
+			envValue: "0",
+			def:      10,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue == "" {
+				os.Unsetenv(tt.envVar)
+			} else {
+				os.Setenv(tt.envVar, tt.envValue)
+			}
+
+			result := getenvInt(tt.envVar, tt.def)
+			if result != tt.expected {
+				t.Errorf("getenvInt(%q, %d) = %d, want %d", tt.envVar, tt.def, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetenvFloat(t *testing.T) {
+	// Save original environment
+	originalValue := os.Getenv("TEST_FLOAT_VAR")
+	defer func() {
+		if originalValue == "" {
+			os.Unsetenv("TEST_FLOAT_VAR")
+		} else {
+			os.Setenv("TEST_FLOAT_VAR", originalValue)
+		}
+	}()
+
+	tests := []struct {
+		name     string
+		envVar   string
+		envValue string
+		def      float64
+		expected float64
+	}{
+		{
+			name:     "valid float",
+			envVar:   "TEST_FLOAT_VAR",
+			envValue: "3.14",
+			def:      1.0,
+			expected: 3.14,
+		},
+		{
+			name:     "valid integer as float",
+			envVar:   "TEST_FLOAT_VAR",
+			envValue: "42",
+			def:      1.0,
+			expected: 42.0,
+		},
+		{
+			name:     "invalid float",
+			envVar:   "TEST_FLOAT_VAR",
+			envValue: "not-a-float",
+			def:      1.0,
+			expected: 1.0,
+		},
+		{
+			name:     "empty string",
+			envVar:   "TEST_FLOAT_VAR",
+			envValue: "",
+			def:      1.0,
+			expected: 1.0,
+		},
+		{
+			name:     "negative float",
+			envVar:   "TEST_FLOAT_VAR",
+			envValue: "-2.5",
+			def:      1.0,
+			expected: -2.5,
+		},
+		{
+			name:     "zero",
+			envVar:   "TEST_FLOAT_VAR",
+			envValue: "0.0",
+			def:      1.0,
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue == "" {
+				os.Unsetenv(tt.envVar)
+			} else {
+				os.Setenv(tt.envVar, tt.envValue)
+			}
+
+			result := getenvFloat(tt.envVar, tt.def)
+			if result != tt.expected {
+				t.Errorf("getenvFloat(%q, %f) = %f, want %f", tt.envVar, tt.def, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetenvBool(t *testing.T) {
+	// Save original environment
+	originalValue := os.Getenv("TEST_BOOL_VAR")
+	defer func() {
+		if originalValue == "" {
+			os.Unsetenv("TEST_BOOL_VAR")
+		} else {
+			os.Setenv("TEST_BOOL_VAR", originalValue)
+		}
+	}()
+
+	tests := []struct {
+		name     string
+		envVar   string
+		envValue string
+		def      bool
+		expected bool
+	}{
+		{
+			name:     "true value",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "true",
+			def:      false,
+			expected: true,
+		},
+		{
+			name:     "false value",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "false",
+			def:      true,
+			expected: false,
+		},
+		{
+			name:     "True value (case insensitive)",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "True",
+			def:      false,
+			expected: true,
+		},
+		{
+			name:     "1 value",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "1",
+			def:      false,
+			expected: true,
+		},
+		{
+			name:     "0 value",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "0",
+			def:      true,
+			expected: false,
+		},
+		{
+			name:     "invalid value uses default",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "not-a-bool",
+			def:      true,
+			expected: true,
+		},
+		{
+			name:     "empty string uses default",
+			envVar:   "TEST_BOOL_VAR",
+			envValue: "",
+			def:      true,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue == "" {
+				os.Unsetenv(tt.envVar)
+			} else {
+				os.Setenv(tt.envVar, tt.envValue)
+			}
+
+			result := getenvBool(tt.envVar, tt.def)
+			if result != tt.expected {
+				t.Errorf("getenvBool(%q, %v) = %v, want %v", tt.envVar, tt.def, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetenvDuration(t *testing.T) {
+	// Save original environment
+	originalValue := os.Getenv("TEST_DURATION_VAR")
+	defer func() {
+		if originalValue == "" {
+			os.Unsetenv("TEST_DURATION_VAR")
+		} else {
+			os.Setenv("TEST_DURATION_VAR", originalValue)
+		}
+	}()
+
+	tests := []struct {
+		name     string
+		envVar   string
+		envValue string
+		def      time.Duration
+		expected time.Duration
+	}{
+		{
+			name:     "valid duration seconds",
+			envVar:   "TEST_DURATION_VAR",
+			envValue: "30s",
+			def:      10 * time.Second,
+			expected: 30 * time.Second,
+		},
+		{
+			name:     "valid duration minutes",
+			envVar:   "TEST_DURATION_VAR",
+			envValue: "5m",
+			def:      10 * time.Second,
+			expected: 5 * time.Minute,
+		},
+		{
+			name:     "valid duration hours",
+			envVar:   "TEST_DURATION_VAR",
+			envValue: "2h",
+			def:      10 * time.Second,
+			expected: 2 * time.Hour,
+		},
+		{
+			name:     "invalid duration uses default",
+			envVar:   "TEST_DURATION_VAR",
+			envValue: "not-a-duration",
+			def:      10 * time.Second,
+			expected: 10 * time.Second,
+		},
+		{
+			name:     "empty string uses default",
+			envVar:   "TEST_DURATION_VAR",
+			envValue: "",
+			def:      10 * time.Second,
+			expected: 10 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue == "" {
+				os.Unsetenv(tt.envVar)
+			} else {
+				os.Setenv(tt.envVar, tt.envValue)
+			}
+
+			result := getenvDuration(tt.envVar, tt.def)
+			if result != tt.expected {
+				t.Errorf("getenvDuration(%q, %v) = %v, want %v", tt.envVar, tt.def, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseBackoffSchedule(t *testing.T) {
+	tests := []struct {
+		name     string
+		schedule string
+		expected []time.Duration
+	}{
+		{
+			name:     "empty string returns default",
+			schedule: "",
+			expected: []time.Duration{1 * time.Second, 4 * time.Second, 16 * time.Second, 1 * time.Minute, 4 * time.Minute, 10 * time.Minute},
+		},
+		{
+			name:     "valid schedule",
+			schedule: "1s,5s,30s",
+			expected: []time.Duration{1 * time.Second, 5 * time.Second, 30 * time.Second},
+		},
+		{
+			name:     "schedule with spaces",
+			schedule: "2s, 10s, 1m",
+			expected: []time.Duration{2 * time.Second, 10 * time.Second, 1 * time.Minute},
+		},
+		{
+			name:     "mixed valid and invalid returns valid only",
+			schedule: "1s,invalid,5s",
+			expected: []time.Duration{1 * time.Second, 5 * time.Second},
+		},
+		{
+			name:     "all invalid returns default",
+			schedule: "invalid,also-invalid",
+			expected: []time.Duration{1 * time.Second, 4 * time.Second, 16 * time.Second, 1 * time.Minute, 4 * time.Minute, 10 * time.Minute},
+		},
+		{
+			name:     "single value",
+			schedule: "10s",
+			expected: []time.Duration{10 * time.Second},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseBackoffSchedule(tt.schedule)
+			if len(result) != len(tt.expected) {
+				t.Errorf("parseBackoffSchedule(%q) returned %d durations, want %d", tt.schedule, len(result), len(tt.expected))
+				return
+			}
+			for i, expected := range tt.expected {
+				if result[i] != expected {
+					t.Errorf("parseBackoffSchedule(%q)[%d] = %v, want %v", tt.schedule, i, result[i], expected)
+				}
 			}
 		})
 	}

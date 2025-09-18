@@ -1,3 +1,31 @@
+# Shared environment variable anchors
+x-database-config: &database-config
+  DB_USER: ${DB_USER}
+  DB_PASS: ${DB_PASS}
+  DB_HOST: ${DB_HOST}
+  DB_PORT: ${DB_PORT}
+  DB_NAME: ${DB_NAME}
+  DB_CONN_MAX_LIFETIME: "1h"
+
+x-jwt-config: &jwt-config
+  JWT_ISSUER: "harborhook"
+  JWT_AUDIENCE: "harborhook-api"
+  ENABLE_TLS: "false"
+
+x-nsq-config: &nsq-config
+  NSQD_TCP_ADDR: ${NSQD_TCP_ADDR}
+  NSQ_LOOKUP_HTTP_ADDR: ${NSQ_LOOKUP_HTTP_ADDR}
+  NSQ_DELIVERIES_TOPIC: ${NSQ_DELIVERIES_TOPIC}
+  NSQ_DLQ_TOPIC: ${NSQ_DLQ_TOPIC}
+  NSQ_WORKER_CHANNEL: ${NSQ_WORKER_CHANNEL}
+
+x-webhook-config: &webhook-config
+  WEBHOOK_SIGNATURE_HEADER: ${WEBHOOK_SIGNATURE_HEADER}
+  WEBHOOK_TIMESTAMP_HEADER: ${WEBHOOK_TIMESTAMP_HEADER}
+
+x-otel-config: &otel-config
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4318"
+
 services:
   postgres:
     build:
@@ -38,7 +66,7 @@ services:
       --max-msg-size=2097152
       --max-body-size=2097152
       --max-req-timeout=60s
-      --msg-timeout=2m
+      --msg-timeout=5m
       --max-heartbeat-interval=60s
     depends_on:
       - nsqlookupd
@@ -48,11 +76,11 @@ services:
     deploy:
       resources:
         limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
           memory: 256M
           cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
 
   nsqadmin:
     image: nsqio/nsq:latest
@@ -63,6 +91,33 @@ services:
       - nsqlookupd
     ports:
       - "4171:4171"
+
+  nsq-monitor:
+    build:
+      context: ../../
+      dockerfile: cmd/nsq-monitor/Dockerfile
+    container_name: hh-nsq-monitor
+    environment:
+      NSQD_HOST: "nsqd:4151"
+      PORT: "8084"
+      POLL_INTERVAL_SECONDS: "15"
+    depends_on:
+      - nsqd
+    ports:
+      - "8084:8084"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.1"
+        reservations:
+          memory: 32M
+          cpus: "0.05"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
 
   # JWKS server for JWT key management
   jwks-server:
@@ -106,27 +161,14 @@ services:
     container_name: hh-ingest
     restart: unless-stopped
     environment:
+      <<: [*database-config, *jwt-config, *nsq-config, *webhook-config, *otel-config]
       APP_NAME: ingest
       HTTP_PORT: ":${INGEST_HTTP_PORT}"
       GRPC_PORT: ":${INGEST_GRPC_PORT}"
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      NSQD_TCP_ADDR: ${NSQD_TCP_ADDR}
-      NSQLOOKUPD_HTTP_ADDR: ${NSQLOOKUPD_HTTP_ADDR}
-      # JWT Configuration
-      JWT_ISSUER: "harborhook"
-      JWT_AUDIENCE: "harborhook-api"
-      ENABLE_TLS: "false"
-      # OpenTelemetry Configuration
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4318"
       OTEL_SERVICE_NAME: "harborhook-ingest"
       # Performance Configuration
       DB_MAX_IDLE_CONNS: "10"
       DB_MAX_OPEN_CONNS: "25"
-      DB_CONN_MAX_LIFETIME: "1h"
     depends_on:
       postgres:
         condition: service_healthy
@@ -141,11 +183,11 @@ services:
     deploy:
       resources:
         limits:
+          memory: 512M
+          cpus: "0.75"
+        reservations:
           memory: 256M
           cpus: "0.5"
-        reservations:
-          memory: 128M
-          cpus: "0.25"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${INGEST_HTTP_PORT}/v1/ping"]
       interval: 10s
@@ -153,46 +195,32 @@ services:
       retries: 3
 
   worker:
-    build: 
+    build:
       context: ../../
       dockerfile: cmd/worker/Dockerfile
-    container_name: hh-worker
     restart: unless-stopped
     environment:
+      <<: [*database-config, *jwt-config, *nsq-config, *webhook-config, *otel-config]
       APP_NAME: worker
       HTTP_PORT: ":${WORKER_HTTP_PORT}"
       GRPC_PORT: ":50052"
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      NSQD_TCP_ADDR: ${NSQD_TCP_ADDR}
-      NSQLOOKUPD_HTTP_ADDR: ${NSQLOOKUPD_HTTP_ADDR}
       MAX_ATTEMPTS: ${MAX_ATTEMPTS}
       BACKOFF_SCHEDULE: ${BACKOFF_SCHEDULE}
       BACKOFF_JITTER_PCT: ${BACKOFF_JITTER_PCT}
       PUBLISH_DLQ_TOPIC: ${PUBLISH_DLQ_TOPIC}
-      # JWT Configuration
-      JWT_ISSUER: "harborhook"
-      JWT_AUDIENCE: "harborhook-api"
-      ENABLE_TLS: "false"
-      # OpenTelemetry Configuration
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4318"
+      WORKER_HTTP_PORT: ${WORKER_HTTP_PORT}
       OTEL_SERVICE_NAME: "harborhook-worker"
       # Performance Configuration
       DB_MAX_IDLE_CONNS: "5"
       DB_MAX_OPEN_CONNS: "10"
-      DB_CONN_MAX_LIFETIME: "1h"
-      WORKER_CONCURRENCY: "10"
-      HTTP_CLIENT_TIMEOUT: "30s"
+      WORKER_CONCURRENCY: "100" # Number of concurrent webhooks each worker can process
+      HTTP_CLIENT_TIMEOUT: "10s" # Wait max 10s for fake-receiver to respond
     depends_on:
       - nsqd
     volumes:
       - ./envoy/certs:/etc/certs:ro
-    ports:
-      - "${WORKER_HTTP_PORT}:${WORKER_HTTP_PORT}"
     deploy:
+      replicas: 3
       resources:
         limits:
           memory: 512M
@@ -200,11 +228,6 @@ services:
         reservations:
           memory: 256M
           cpus: "0.5"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${WORKER_HTTP_PORT}/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
 
   fake-receiver:
     build:
@@ -213,10 +236,12 @@ services:
     container_name: hh-fake-receiver
     restart: unless-stopped
     environment:
-      FAIL_FIRST: ${FAIL_FIRST}
+      <<: *webhook-config
+      FAIL_FIRST_N: ${FAIL_FIRST_N}
       ENDPOINT_SECRET: ${ENDPOINT_SECRET}
       SIGNING_LEEWAY_SECONDS: ${SIGNING_LEEWAY_SECONDS}
       RESPONSE_DELAY_MS: ${RESPONSE_DELAY_MS:-0}
+      FAKE_RECEIVER_PORT: ${FAKE_RECEIVER_PORT}
       # Security Configuration
       MAX_BODY_SIZE: "1048576"  # 1MB
       READ_TIMEOUT: "10s"
@@ -227,11 +252,11 @@ services:
     deploy:
       resources:
         limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
           memory: 128M
           cpus: "0.25"
-        reservations:
-          memory: 64M
-          cpus: "0.1"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/healthz"]
       interval: 30s

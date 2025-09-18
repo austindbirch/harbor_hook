@@ -7,7 +7,7 @@ alerting:
   alertmanagers:
     - static_configs:
         - targets:
-          - alertmanager:9093
+          - hh-alertmanager:9093
 
 # Load rules once and periodically evaluate them
 rule_files:
@@ -16,10 +16,13 @@ rule_files:
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['prometheus:9090'] # Prom scraping itself (container name)
+      - targets: ['hh-prometheus:9090'] # Prom scraping itself (container name)
   - job_name: 'ingest'
     static_configs:
-      - targets: ['ingest:8080'] # Using service name instead of localhost to point Prom at the container DNS names on the Compose network
+      - targets: ['hh-ingest:8080'] # Using service name instead of localhost to point Prom at the container DNS names on the Compose network
   - job_name: 'worker'
     static_configs:
-      - targets: ['worker:8083'] # Using service name instead of localhost to point Prom at the container DNS names on the Compose network
+      - targets: ['docker-worker-1:8083', 'docker-worker-2:8083', 'docker-worker-3:8083'] # All worker replicas
+  - job_name: 'nsq-monitor'
+    static_configs:
+      - targets: ['hh-nsq-monitor:8084'] # NSQ monitoring service

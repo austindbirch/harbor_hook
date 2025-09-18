@@ -156,7 +156,7 @@
             }
           },
           "mappings": [],
-          "unit": "req/s"
+          "unit": "requests"
         },
         "overrides": []
       },
@@ -191,7 +191,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(rate(harborhook_events_published_total[5m]))",
+          "expr": "sum(increase(harborhook_events_published_total[5m]))",
           "interval": "",
           "legendFormat": "Events Published",
           "refId": "A"
@@ -201,7 +201,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(rate(harborhook_deliveries_total[5m]))",
+          "expr": "sum(increase(harborhook_deliveries_total[5m]))",
           "interval": "",
           "legendFormat": "Deliveries Processed",
           "refId": "B"

@@ -103,7 +103,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.50, rate(harborhook_delivery_latency_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, sum(rate(harborhook_delivery_latency_seconds_bucket[5m])) by (le))",
           "interval": "",
           "legendFormat": "P50",
           "refId": "A"
@@ -113,7 +113,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.90, rate(harborhook_delivery_latency_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.90, sum(rate(harborhook_delivery_latency_seconds_bucket[5m])) by (le))",
           "interval": "",
           "legendFormat": "P90",
           "refId": "B"
@@ -123,7 +123,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "histogram_quantile(0.99, rate(harborhook_delivery_latency_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, sum(rate(harborhook_delivery_latency_seconds_bucket[5m])) by (le))",
           "interval": "",
           "legendFormat": "P99",
           "refId": "C"
@@ -477,7 +477,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "rate(harborhook_retries_total[5m])",
+          "expr": "sum(rate(harborhook_retries_total[5m])) by (reason)",
           "interval": "",
           "legendFormat": "{{reason}}",
           "refId": "A"

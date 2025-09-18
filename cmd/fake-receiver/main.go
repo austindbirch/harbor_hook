@@ -9,92 +9,87 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/austindbirch/harbor_hook/internal/config"
 )
 
-const (
-	sigHeader = "X-Harborhook-Signature"
-	tsHeader  = "X-HarborHook-Timestamp"
-)
 
 var (
-	failFirstN     = 0
-	reqCount       = atomic.Int64{}
-	endpointSecret = ""
-	maxSkew        = 5 * time.Minute
-	responseDelay  = 0 * time.Millisecond
+	reqCount = atomic.Int64{}
 )
 
 func main() {
-	// Parse fail first settings
-	if v := os.Getenv("FAIL_FIRST_N"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			failFirstN = n
-		}
-	}
-	// Parse endpoint secret
-	if v := os.Getenv("ENDPOINT_SECRET"); v != "" {
-		endpointSecret = v
-	}
-	// Parse signing timestamp leeway
-	if v := os.Getenv("SIGNING_LEEWAY_SECONDS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			maxSkew = time.Duration(n) * time.Second
-		}
-	}
-	// Parse response delay for load simulation
-	if v := os.Getenv("RESPONSE_DELAY_MS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			responseDelay = time.Duration(n) * time.Millisecond
-		}
-	}
+	cfg := config.FromEnv()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"ok":true}`)) })
-	mux.HandleFunc("/hook", handleHook)
+	mux.HandleFunc("/hook", handleHookFactory(cfg))
 
-	addr := ":8081"
 	server := &http.Server{
-		Addr:         addr,
+		Addr:         cfg.FakeReceiver.Port,
 		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.FakeReceiver.ReadTimeout,
+		WriteTimeout: cfg.FakeReceiver.WriteTimeout,
+		IdleTimeout:  cfg.FakeReceiver.IdleTimeout,
 	}
-	log.Printf("fake-receiver listening on %s", addr)
+	log.Printf("fake-receiver listening on %s", cfg.FakeReceiver.Port)
 	log.Fatal(server.ListenAndServe())
 }
 
-func handleHook(w http.ResponseWriter, r *http.Request) {
+func handleHookFactory(cfg config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handleHook(w, r, cfg)
+	}
+}
+
+func handleHook(w http.ResponseWriter, r *http.Request, cfg config.Config) {
 	n := reqCount.Add(1)
 	b, _ := io.ReadAll(r.Body)
 	defer r.Body.Close()
 
-	if endpointSecret != "" {
-		if ok, msg := verifySignature(endpointSecret, b, r.Header.Get(tsHeader), r.Header.Get(sigHeader), maxSkew); !ok {
-			log.Printf("fake-receiver failed to verify signature: %s", msg)
+	if cfg.FakeReceiver.EndpointSecret != "" {
+		leeway := time.Duration(cfg.FakeReceiver.SigningLeewaySeconds) * time.Second
+		if ok, msg := verifySignature(cfg.FakeReceiver.EndpointSecret, b, r.Header.Get(cfg.NSQ.TimestampHeader), r.Header.Get(cfg.NSQ.SignatureHeader), leeway); !ok {
+			traceID := r.Header.Get("X-Trace-Id")
+			if traceID != "" {
+				log.Printf("fake-receiver failed to verify signature: %s trace_id=%s", msg, traceID)
+			} else {
+				log.Printf("fake-receiver failed to verify signature: %s", msg)
+			}
 			http.Error(w, "invalid signature: "+msg, http.StatusUnauthorized)
 			return
 		}
 	}
 
 	// Simulate flakiness: first N request -> 500
-	if n <= int64(failFirstN) {
-		log.Printf("FAILING (%d/%d) %s headers=%d body=%s", n, failFirstN, r.URL.Path, len(r.Header), truncate(string(b), 160))
+	if n <= int64(cfg.FakeReceiver.FailFirstN) {
+		traceID := r.Header.Get("X-Trace-Id")
+		if traceID != "" {
+			log.Printf("FAILING (%d/%d) %s trace_id=%s headers=%d body=%s", n, cfg.FakeReceiver.FailFirstN, r.URL.Path, traceID, len(r.Header), truncate(string(b), 160))
+		} else {
+			log.Printf("FAILING (%d/%d) %s headers=%d body=%s", n, cfg.FakeReceiver.FailFirstN, r.URL.Path, len(r.Header), truncate(string(b), 160))
+		}
 		http.Error(w, "temporary failure", http.StatusInternalServerError)
 		return
 	}
 
 	// Simulate processing delay if configured
+	responseDelay := time.Duration(cfg.FakeReceiver.ResponseDelayMS) * time.Millisecond
 	if responseDelay > 0 {
 		time.Sleep(responseDelay)
 	}
 
-	log.Printf("fake-receiver OK %s  headers=%d body=%q", r.URL.Path, len(r.Header), truncate(string(b), 160))
+	// Extract trace ID for end-to-end traceability
+	traceID := r.Header.Get("X-Trace-Id")
+	if traceID != "" {
+		log.Printf("fake-receiver OK %s trace_id=%s headers=%d body=%q", r.URL.Path, traceID, len(r.Header), truncate(string(b), 160))
+	} else {
+		log.Printf("fake-receiver OK %s headers=%d body=%q", r.URL.Path, len(r.Header), truncate(string(b), 160))
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`ok`))
 }

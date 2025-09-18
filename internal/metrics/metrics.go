@@ -1,8 +1,9 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -34,13 +35,7 @@ var (
 		[]string{"tenant_id"},
 	)
 
-	// Worker backlog gauge (Phase 5 requirement)
-	WorkerBacklog = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "harborhook_worker_backlog",
-			Help: "Current number of messages waiting to be processed by workers.",
-		},
-	)
+	// Note: WorkerBacklog moved to dedicated nsq-monitor service
 
 	// Retries with reason label (Phase 5 requirement)
 	RetriesTotal = prometheus.NewCounterVec(
@@ -86,7 +81,6 @@ func MustRegister(reg *prometheus.Registry) {
 		EventsPublishedTotal,
 		DeliveriesTotal,
 		DeliveryLatencySeconds,
-		WorkerBacklog,
 		RetriesTotal,
 		DLQTotal,
 		HTTPDeliveryDuration,
@@ -122,10 +116,7 @@ func RecordDLQ(reason string) {
 	DLQTotal.WithLabelValues(reason).Inc()
 }
 
-// UpdateWorkerBacklog sets the current worker backlog
-func UpdateWorkerBacklog(count float64) {
-	WorkerBacklog.Set(count)
-}
+// Note: UpdateWorkerBacklog removed - now handled by nsq-monitor service
 
 // UpdateNSQTopicDepth updates NSQ topic depth
 func UpdateNSQTopicDepth(topic, channel string, depth float64) {

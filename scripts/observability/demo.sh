@@ -52,7 +52,7 @@ FAKE_SECRET="demo_secret"               # Shared secret for HMAC signing
 TRAFFIC_DURATION=${TRAFFIC_DURATION:-120}     # 2 minutes of traffic by default
 HIGH_TRAFFIC_RPS=${HIGH_TRAFFIC_RPS:-10}      # 10 requests per second
 BURST_TRAFFIC_RPS=${BURST_TRAFFIC_RPS:-50}    # 50 requests per second for bursts
-FAILURE_PERCENTAGE=${FAILURE_PERCENTAGE:-20}  # 20% of requests should fail
+FAILURE_PERCENTAGE=${FAILURE_PERCENTAGE:-5}   # 5% of requests should fail
 
 # Temp file to pass counts back from background subshell
 COUNTS_FILE="$(mktemp -t harbor_counts.XXXXXX)"
@@ -261,7 +261,7 @@ generate_dlq_traffic() {
     # Generate events that will immediately fail and go to DLQ
     print_step "Publishing events to dead endpoints (these will fail fast and hit DLQ)..."
     local dlq_count=0
-    local dlq_events=30  # Generate 30 events that will fail quickly
+    local dlq_events=10  # Generate 10 events that will fail quickly
 
     for i in $(seq 1 $dlq_events); do
         local payload="{\"demo\": true, \"type\": \"dlq_test\", \"attempt\": $i, \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"expected_outcome\": \"DLQ\", \"reason\": \"dead_endpoint_test\"}"

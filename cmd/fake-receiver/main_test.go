@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/austindbirch/harbor_hook/internal/config"
 )
 
 func TestVerifySignature(t *testing.T) {
@@ -25,14 +27,14 @@ func TestVerifySignature(t *testing.T) {
 	validSig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 
 	tests := []struct {
-		name         string
-		secret       string
-		body         []byte
-		timestamp    string
-		signature    string
-		leeway       time.Duration
-		expectValid  bool
-		expectedMsg  string
+		name        string
+		secret      string
+		body        []byte
+		timestamp   string
+		signature   string
+		leeway      time.Duration
+		expectValid bool
+		expectedMsg string
 	}{
 		{
 			name:        "valid signature",
@@ -270,42 +272,40 @@ func TestHealthzHandler(t *testing.T) {
 }
 
 func TestHandleHook(t *testing.T) {
+	cfg := config.FromEnv() // Get default config
+
 	tests := []struct {
-		name               string
-		body               string
-		headers            map[string]string
-		failFirstN         int
-		endpointSecret     string
-		expectedStatus     int
+		name                 string
+		body                 string
+		headers              map[string]string
+		cfgOverrides         config.FakeReceiver
+		expectedStatus       int
 		expectedBodyContains string
 	}{
 		{
-			name:               "successful request",
-			body:               "test payload",
-			headers:            map[string]string{},
-			failFirstN:         0,
-			endpointSecret:     "",
-			expectedStatus:     http.StatusOK,
+			name:                 "successful request",
+			body:                 "test payload",
+			headers:              map[string]string{},
+			cfgOverrides:         config.FakeReceiver{FailFirstN: 0, EndpointSecret: ""},
+			expectedStatus:       http.StatusOK,
 			expectedBodyContains: "ok",
 		},
 		{
-			name:               "fail first request",
-			body:               "test payload",
-			headers:            map[string]string{},
-			failFirstN:         1,
-			endpointSecret:     "",
-			expectedStatus:     http.StatusInternalServerError,
+			name:                 "fail first request",
+			body:                 "test payload",
+			headers:              map[string]string{},
+			cfgOverrides:         config.FakeReceiver{FailFirstN: 1, EndpointSecret: ""},
+			expectedStatus:       http.StatusInternalServerError,
 			expectedBodyContains: "temporary failure",
 		},
 		{
-			name:   "missing signature with secret configured",
-			body:   "test payload",
+			name: "missing signature with secret configured",
+			body: "test payload",
 			headers: map[string]string{
-				tsHeader: strconv.FormatInt(time.Now().Unix(), 10),
+				"X-HarborHook-Timestamp": strconv.FormatInt(time.Now().Unix(), 10),
 			},
-			failFirstN:         0,
-			endpointSecret:     "test-secret",
-			expectedStatus:     http.StatusUnauthorized,
+			cfgOverrides:         config.FakeReceiver{FailFirstN: 0, EndpointSecret: "test-secret"},
+			expectedStatus:       http.StatusUnauthorized,
 			expectedBodyContains: "invalid signature",
 		},
 		{
@@ -319,29 +319,25 @@ func TestHandleHook(t *testing.T) {
 				mac.Write([]byte(ts))
 				sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 				return map[string]string{
-					tsHeader:  ts,
-					sigHeader: sig,
+					"X-HarborHook-Timestamp": ts,
+					"X-HarborHook-Signature": sig,
 				}
 			}(),
-			failFirstN:         0,
-			endpointSecret:     "test-secret",
-			expectedStatus:     http.StatusOK,
+			cfgOverrides:         config.FakeReceiver{FailFirstN: 0, EndpointSecret: "test-secret"},
+			expectedStatus:       http.StatusOK,
 			expectedBodyContains: "ok",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset request counter and set test variables
+			// Reset request counter
 			reqCount.Store(0)
-			originalFailFirst := failFirstN
-			originalSecret := endpointSecret
-			failFirstN = tt.failFirstN
-			endpointSecret = tt.endpointSecret
-			defer func() {
-				failFirstN = originalFailFirst
-				endpointSecret = originalSecret
-			}()
+
+			// Create test config with overrides
+			testCfg := cfg
+			testCfg.FakeReceiver = tt.cfgOverrides
+			testCfg.NSQ = cfg.NSQ // Use default NSQ config for headers
 
 			req := httptest.NewRequest("POST", "/hook", strings.NewReader(tt.body))
 			for k, v := range tt.headers {
@@ -349,7 +345,8 @@ func TestHandleHook(t *testing.T) {
 			}
 			w := httptest.NewRecorder()
 
-			handleHook(w, req)
+			// Use the new handleHook function that takes config
+			handleHook(w, req, testCfg)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("handleHook() status = %d, want %d", w.Code, tt.expectedStatus)

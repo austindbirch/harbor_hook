@@ -15,7 +15,7 @@ groups:
         annotations:
           summary: "Harbor Hook SLO burn rate is critically high"
           description: "The error rate is burning through the SLO error budget 10x faster than acceptable. Current burn rate: {{ $value }}x"
-          error_budget: "{{ with query \"(1 - (99.9 - (rate(harborhook_deliveries_total{status='delivered'}[24h]) / (rate(harborhook_deliveries_total{status='delivered'}[24h]) + rate(harborhook_deliveries_total{status='failed'}[24h])) * 100)) / (100 - 99.9)) * 100\" }}{{ . | first | value | printf \"%.1f\" }}{{ end }}%"
+          error_budget: "{{ $value | printf \"%.1f\" }}%"
           burn_rate: "{{ $value | printf \"%.1f\" }}"
           time_to_breach: "~6 hours at current rate"
           runbook: "https://example.com/runbooks/slo-burn-rate"
@@ -33,7 +33,7 @@ groups:
         annotations:
           summary: "Harbor Hook SLO burn rate is elevated"
           description: "The error rate is burning through the SLO error budget 5x faster than acceptable. Current burn rate: {{ $value }}x"
-          error_budget: "{{ with query \"(1 - (99.9 - (rate(harborhook_deliveries_total{status='delivered'}[24h]) / (rate(harborhook_deliveries_total{status='delivered'}[24h]) + rate(harborhook_deliveries_total{status='failed'}[24h])) * 100)) / (100 - 99.9)) * 100\" }}{{ . | first | value | printf \"%.1f\" }}{{ end }}%"
+          error_budget: "{{ $value | printf \"%.1f\" }}%"
           burn_rate: "{{ $value | printf \"%.1f\" }}"
           time_to_breach: "~12 hours at current rate"
           runbook: "https://example.com/runbooks/slo-burn-rate"
@@ -51,7 +51,7 @@ groups:
         annotations:
           summary: "Harbor Hook SLO burn rate is consistently elevated"
           description: "The error rate is burning through the SLO error budget 2x faster than acceptable over 6 hours"
-          error_budget: "{{ with query \"(1 - (99.9 - (rate(harborhook_deliveries_total{status='delivered'}[24h]) / (rate(harborhook_deliveries_total{status='delivered'}[24h]) + rate(harborhook_deliveries_total{status='failed'}[24h])) * 100)) / (100 - 99.9)) * 100\" }}{{ . | first | value | printf \"%.1f\" }}{{ end }}%"
+          error_budget: "{{ $value | printf \"%.1f\" }}%"
           burn_rate: "{{ $value | printf \"%.1f\" }}"
           time_to_breach: "~2 days at current rate"
           runbook: "https://example.com/runbooks/slo-burn-rate"

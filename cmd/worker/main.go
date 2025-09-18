@@ -32,80 +32,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-const (
-	topic     = "deliveries"
-	channel   = "workers"
-	dlqTopic  = "deliveries_dlq"
-	sigHeader = "X-HarborHook-Signature" // sha256=<hex>
-	tsHeader  = "X-HarborHook-Timestamp" // unix seconds
-)
-
-type retryCfg struct {
-	maxAttempts int
-	backoff     []time.Duration
-	jitterPct   float64
-	publishDLQ  bool
-}
-
-// readRetryCfg reads the retry configuration from env vars.
-func readRetryCfg() retryCfg {
-	// Try to parse maxAttempts
-	maxAttempts := parseEnvInt("MAX_ATTEMPTS", 6)
-	// Try to parse backoff schedule
-	js := os.Getenv("BACKOFF_SCHEDULE")
-	if js == "" {
-		js = "1s,4s,16s,1m,4m,10m"
-	}
-	var schedule []time.Duration
-	for _, p := range strings.Split(js, ",") {
-		d, err := time.ParseDuration(strings.TrimSpace(p))
-		if err == nil {
-			schedule = append(schedule, d)
-		}
-	}
-	// If schedule is empty, use default values
-	if len(schedule) == 0 {
-		schedule = []time.Duration{
-			time.Second,
-			4 * time.Second,
-			16 * time.Second,
-			time.Minute,
-			4 * time.Minute,
-			10 * time.Minute,
-		}
-	}
-	// Try to parse jitter percentage
-	jitter := parseEnvFloat("BACKOFF_JITTER_PCT", 0.25)
-	// Try to parse publish DLQ
-	pubDLQ := strings.EqualFold(os.Getenv("PUBLISH_DLQ_TOPIC"), "true")
-	return retryCfg{
-		maxAttempts: maxAttempts,
-		backoff:     schedule,
-		jitterPct:   jitter,
-		publishDLQ:  pubDLQ,
-	}
-}
-
-// Helper func to parse int env vars, fallback to default
-func parseEnvInt(k string, def int) int {
-	if v := os.Getenv(k); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
-		}
-	}
-	return def
-}
-
-// Helper func to parse float env vars, fallback to default
-func parseEnvFloat(k string, def float64) float64 {
-	if v := os.Getenv(k); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
-	}
-	return def
-}
-
 func main() {
 	cfg := config.FromEnv()
 	ctx := context.Background()
@@ -113,6 +39,14 @@ func main() {
 
 	// Initialize structured logging
 	logger := logging.New("harborhook-worker")
+
+	// Debug: Log the NSQ configuration
+	logger.Plain().WithFields(map[string]any{
+		"nsqd_tcp_addr":    cfg.NSQ.NsqdTCPAddr,
+		"lookup_http_addr": cfg.NSQ.LookupHTTPAddr,
+		"deliveries_topic": cfg.NSQ.DeliveriesTopic,
+		"worker_channel":   cfg.NSQ.WorkerChannel,
+	}).Info("NSQ configuration loaded")
 
 	// Initialize OpenTelemetry tracing
 	shutdown, err := tracing.InitTracing(ctx, "harborhook-worker")
@@ -139,10 +73,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-	httpPort := os.Getenv("HTTP_PORT")
-	if httpPort == "" {
-		httpPort = ":8082" // default fallback
-	}
+	httpPort := cfg.Worker.HTTPPort
 	httpSrv := &http.Server{Addr: httpPort, Handler: mux}
 	go func() {
 		logger.Plain().WithField("addr", httpSrv.Addr).Info("worker HTTP server starting")
@@ -153,16 +84,15 @@ func main() {
 
 	// NSQ consumer
 	conf := nsq.NewConfig()
-	conf.MaxInFlight = 1000
-	consumer, err := nsq.NewConsumer(topic, channel, conf)
+	conf.MaxInFlight = 1500
+	consumer, err := nsq.NewConsumer(cfg.NSQ.DeliveriesTopic, cfg.NSQ.WorkerChannel, conf)
 	if err != nil {
 		logger.Plain().WithError(err).Fatal("nsq consumer creation failed")
 	}
 
 	// DLQ producer
 	var dlqProducer *nsq.Producer
-	retry := readRetryCfg()
-	if retry.publishDLQ {
+	if cfg.Worker.PublishDLQ {
 		dlqProducer, err = nsq.NewProducer(cfg.NSQ.NsqdTCPAddr, nsq.NewConfig())
 		if err != nil {
 			logger.Plain().WithError(err).Fatal("nsq producer for DLQ creation failed")
@@ -239,8 +169,8 @@ func main() {
 
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, t.EndpointURL, bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(tsHeader, ts)
-		req.Header.Set(sigHeader, "sha256="+sig)
+		req.Header.Set(cfg.NSQ.TimestampHeader, ts)
+		req.Header.Set(cfg.NSQ.SignatureHeader, "sha256="+sig)
 
 		// Add trace ID to HTTP headers for correlation
 		if traceID := tracing.GetTraceID(ctx); traceID != "" {
@@ -312,7 +242,7 @@ func main() {
 		if err := pool.QueryRow(ctx, `SELECT attempt FROM harborhook.deliveries WHERE id=$1`, t.DeliveryID).Scan(&newAttempt); err != nil {
 			logger.WithContext(ctx).WithDelivery(t.DeliveryID).WithError(err).Error("read attempt failed")
 			tracing.SetSpanError(ctx, err)
-			newAttempt = retry.maxAttempts // be safe -> DLQ
+			newAttempt = cfg.Worker.MaxAttempts // be safe -> DLQ
 		}
 
 		// classify reason for metrics and record enhanced metrics
@@ -324,7 +254,7 @@ func main() {
 			metrics.RecordHTTPDelivery(t.TenantID, t.EndpointID, strconv.Itoa(status), latency)
 		}
 
-		if newAttempt >= retry.maxAttempts {
+		if newAttempt >= cfg.Worker.MaxAttempts {
 			// DLQ - Insert into DLQ table first
 			tracing.AddSpanEvent(ctx, "delivery.dlq", attribute.Int("attempt", newAttempt))
 			_, qErr := pool.Exec(ctx, `
@@ -347,15 +277,15 @@ func main() {
 			}
 
 			// DLQ (topic publish)
-			if retry.publishDLQ && dlqProducer != nil {
+			if cfg.Worker.PublishDLQ && dlqProducer != nil {
 				env := delivery.NewDeadLetter(t, newAttempt, status, errString(doErr), fmt.Sprintf("max attempts reached (%d)", newAttempt))
 				b, _ := json.Marshal(env)
-				if err := dlqProducer.Publish(dlqTopic, b); err != nil {
+				if err := dlqProducer.Publish(cfg.NSQ.DLQTopic, b); err != nil {
 					logger.WithContext(ctx).WithDelivery(t.DeliveryID).WithError(err).Error("dlq publish failed")
 					tracing.SetSpanError(ctx, err)
 				} else {
-					logger.WithContext(ctx).WithDelivery(t.DeliveryID).WithField("topic", dlqTopic).Info("dlq published")
-					tracing.AddSpanEvent(ctx, "nsq.published_dlq", attribute.String("topic", dlqTopic))
+					logger.WithContext(ctx).WithDelivery(t.DeliveryID).WithField("topic", cfg.NSQ.DLQTopic).Info("dlq published")
+					tracing.AddSpanEvent(ctx, "nsq.published_dlq", attribute.String("topic", cfg.NSQ.DLQTopic))
 				}
 			}
 
@@ -370,7 +300,7 @@ func main() {
 		}
 
 		// compute backoff with jitter and requeue
-		delay := computeDelay(newAttempt, retry.backoff, retry.jitterPct)
+		delay := computeDelay(newAttempt, cfg.Worker.BackoffSchedule, cfg.Worker.JitterPercent)
 		tracing.AddSpanEvent(ctx, "delivery.requeue",
 			attribute.Int("attempt", newAttempt),
 			attribute.String("delay", delay.String()),
@@ -383,12 +313,12 @@ func main() {
 			"attempt": newAttempt,
 			"delay":   delay.String(),
 		}).Info("requeue delivery")
-		
+
 		// Update task attempt count before requeuing
 		t.Attempt = newAttempt
 		updatedBody, _ := json.Marshal(t)
 		m.Body = updatedBody
-		
+
 		m.Requeue(delay) // explicit requeue with delay
 		return nil
 	}))
@@ -397,7 +327,11 @@ func main() {
 	if err := consumer.ConnectToNSQD(cfg.NSQ.NsqdTCPAddr); err != nil {
 		logger.Plain().WithError(err).Fatal("connect to nsqd failed")
 	}
-	if err := consumer.ConnectToNSQLookupd(cfg.NSQ.LookupHTTPAddr); err != nil {
+
+	// Extract host:port from the HTTP URL for NSQ lookupd connection
+	lookupAddr := strings.TrimPrefix(cfg.NSQ.LookupHTTPAddr, "http://")
+	lookupAddr = strings.TrimPrefix(lookupAddr, "https://")
+	if err := consumer.ConnectToNSQLookupd(lookupAddr); err != nil {
 		logger.Plain().WithError(err).Fatal("connect to lookupd failed")
 	}
 
@@ -501,16 +435,10 @@ func startBacklogMonitor(cfg config.Config) {
 			}
 			resp.Body.Close()
 
-			// Find deliveries topic and workers channel
+			// Update NSQ topic depth metrics only
 			for _, topic := range stats.Topics {
-				if topic.Name == "deliveries" {
-					for _, channel := range topic.Channels {
-						if channel.Name == "workers" {
-							metrics.UpdateWorkerBacklog(float64(channel.Depth))
-						}
-						// Update NSQ topic depth metric
-						metrics.UpdateNSQTopicDepth(topic.Name, channel.Name, float64(channel.Depth))
-					}
+				for _, channel := range topic.Channels {
+					metrics.UpdateNSQTopicDepth(topic.Name, channel.Name, float64(channel.Depth))
 				}
 			}
 		}

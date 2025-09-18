@@ -20,158 +20,11 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/austindbirch/harbor_hook/internal/config"
 )
 
-func TestParseEnvInt(t *testing.T) {
-	// Save original environment
-	originalValue := os.Getenv("TEST_INT_VAR")
-	defer func() {
-		if originalValue == "" {
-			os.Unsetenv("TEST_INT_VAR")
-		} else {
-			os.Setenv("TEST_INT_VAR", originalValue)
-		}
-	}()
-
-	tests := []struct {
-		name     string
-		envVar   string
-		envValue string
-		def      int
-		expected int
-	}{
-		{
-			name:     "valid integer",
-			envVar:   "TEST_INT_VAR",
-			envValue: "42",
-			def:      10,
-			expected: 42,
-		},
-		{
-			name:     "invalid integer",
-			envVar:   "TEST_INT_VAR",
-			envValue: "not-an-int",
-			def:      10,
-			expected: 10,
-		},
-		{
-			name:     "empty string",
-			envVar:   "TEST_INT_VAR",
-			envValue: "",
-			def:      10,
-			expected: 10,
-		},
-		{
-			name:     "negative integer",
-			envVar:   "TEST_INT_VAR",
-			envValue: "-5",
-			def:      10,
-			expected: -5,
-		},
-		{
-			name:     "zero",
-			envVar:   "TEST_INT_VAR",
-			envValue: "0",
-			def:      10,
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envValue == "" {
-				os.Unsetenv(tt.envVar)
-			} else {
-				os.Setenv(tt.envVar, tt.envValue)
-			}
-
-			result := parseEnvInt(tt.envVar, tt.def)
-			if result != tt.expected {
-				t.Errorf("parseEnvInt(%q, %d) = %d, want %d", tt.envVar, tt.def, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestParseEnvFloat(t *testing.T) {
-	// Save original environment
-	originalValue := os.Getenv("TEST_FLOAT_VAR")
-	defer func() {
-		if originalValue == "" {
-			os.Unsetenv("TEST_FLOAT_VAR")
-		} else {
-			os.Setenv("TEST_FLOAT_VAR", originalValue)
-		}
-	}()
-
-	tests := []struct {
-		name     string
-		envVar   string
-		envValue string
-		def      float64
-		expected float64
-	}{
-		{
-			name:     "valid float",
-			envVar:   "TEST_FLOAT_VAR",
-			envValue: "3.14",
-			def:      1.0,
-			expected: 3.14,
-		},
-		{
-			name:     "valid integer as float",
-			envVar:   "TEST_FLOAT_VAR",
-			envValue: "42",
-			def:      1.0,
-			expected: 42.0,
-		},
-		{
-			name:     "invalid float",
-			envVar:   "TEST_FLOAT_VAR",
-			envValue: "not-a-float",
-			def:      1.0,
-			expected: 1.0,
-		},
-		{
-			name:     "empty string",
-			envVar:   "TEST_FLOAT_VAR",
-			envValue: "",
-			def:      1.0,
-			expected: 1.0,
-		},
-		{
-			name:     "negative float",
-			envVar:   "TEST_FLOAT_VAR",
-			envValue: "-2.5",
-			def:      1.0,
-			expected: -2.5,
-		},
-		{
-			name:     "zero",
-			envVar:   "TEST_FLOAT_VAR",
-			envValue: "0.0",
-			def:      1.0,
-			expected: 0.0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envValue == "" {
-				os.Unsetenv(tt.envVar)
-			} else {
-				os.Setenv(tt.envVar, tt.envValue)
-			}
-
-			result := parseEnvFloat(tt.envVar, tt.def)
-			if result != tt.expected {
-				t.Errorf("parseEnvFloat(%q, %f) = %f, want %f", tt.envVar, tt.def, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestReadRetryCfg(t *testing.T) {
+func TestWorkerConfig(t *testing.T) {
 	// Save original environment variables
 	originalEnvVars := map[string]string{
 		"MAX_ATTEMPTS":       os.Getenv("MAX_ATTEMPTS"),
@@ -194,22 +47,22 @@ func TestReadRetryCfg(t *testing.T) {
 	tests := []struct {
 		name     string
 		envVars  map[string]string
-		validate func(t *testing.T, cfg retryCfg)
+		validate func(t *testing.T, cfg config.Config)
 	}{
 		{
 			name:    "default configuration",
 			envVars: map[string]string{
 				// No environment variables set - should use defaults
 			},
-			validate: func(t *testing.T, cfg retryCfg) {
-				if cfg.maxAttempts != 6 {
-					t.Errorf("Expected maxAttempts 6, got %d", cfg.maxAttempts)
+			validate: func(t *testing.T, cfg config.Config) {
+				if cfg.Worker.MaxAttempts != 6 {
+					t.Errorf("Expected MaxAttempts 6, got %d", cfg.Worker.MaxAttempts)
 				}
-				if cfg.jitterPct != 0.25 {
-					t.Errorf("Expected jitterPct 0.25, got %f", cfg.jitterPct)
+				if cfg.Worker.JitterPercent != 0.25 {
+					t.Errorf("Expected JitterPercent 0.25, got %f", cfg.Worker.JitterPercent)
 				}
-				if cfg.publishDLQ != false {
-					t.Errorf("Expected publishDLQ false, got %v", cfg.publishDLQ)
+				if cfg.Worker.PublishDLQ != false {
+					t.Errorf("Expected PublishDLQ false, got %v", cfg.Worker.PublishDLQ)
 				}
 				expectedSchedule := []time.Duration{
 					time.Second,
@@ -219,13 +72,13 @@ func TestReadRetryCfg(t *testing.T) {
 					4 * time.Minute,
 					10 * time.Minute,
 				}
-				if len(cfg.backoff) != len(expectedSchedule) {
-					t.Errorf("Expected backoff schedule length %d, got %d", len(expectedSchedule), len(cfg.backoff))
+				if len(cfg.Worker.BackoffSchedule) != len(expectedSchedule) {
+					t.Errorf("Expected backoff schedule length %d, got %d", len(expectedSchedule), len(cfg.Worker.BackoffSchedule))
 					return
 				}
 				for i, expected := range expectedSchedule {
-					if cfg.backoff[i] != expected {
-						t.Errorf("Expected backoff[%d] = %v, got %v", i, expected, cfg.backoff[i])
+					if cfg.Worker.BackoffSchedule[i] != expected {
+						t.Errorf("Expected BackoffSchedule[%d] = %v, got %v", i, expected, cfg.Worker.BackoffSchedule[i])
 					}
 				}
 			},
@@ -238,28 +91,28 @@ func TestReadRetryCfg(t *testing.T) {
 				"BACKOFF_JITTER_PCT": "0.1",
 				"PUBLISH_DLQ_TOPIC":  "true",
 			},
-			validate: func(t *testing.T, cfg retryCfg) {
-				if cfg.maxAttempts != 3 {
-					t.Errorf("Expected maxAttempts 3, got %d", cfg.maxAttempts)
+			validate: func(t *testing.T, cfg config.Config) {
+				if cfg.Worker.MaxAttempts != 3 {
+					t.Errorf("Expected MaxAttempts 3, got %d", cfg.Worker.MaxAttempts)
 				}
-				if cfg.jitterPct != 0.1 {
-					t.Errorf("Expected jitterPct 0.1, got %f", cfg.jitterPct)
+				if cfg.Worker.JitterPercent != 0.1 {
+					t.Errorf("Expected JitterPercent 0.1, got %f", cfg.Worker.JitterPercent)
 				}
-				if cfg.publishDLQ != true {
-					t.Errorf("Expected publishDLQ true, got %v", cfg.publishDLQ)
+				if cfg.Worker.PublishDLQ != true {
+					t.Errorf("Expected PublishDLQ true, got %v", cfg.Worker.PublishDLQ)
 				}
 				expectedSchedule := []time.Duration{
 					2 * time.Second,
 					8 * time.Second,
 					30 * time.Second,
 				}
-				if len(cfg.backoff) != len(expectedSchedule) {
-					t.Errorf("Expected backoff schedule length %d, got %d", len(expectedSchedule), len(cfg.backoff))
+				if len(cfg.Worker.BackoffSchedule) != len(expectedSchedule) {
+					t.Errorf("Expected backoff schedule length %d, got %d", len(expectedSchedule), len(cfg.Worker.BackoffSchedule))
 					return
 				}
 				for i, expected := range expectedSchedule {
-					if cfg.backoff[i] != expected {
-						t.Errorf("Expected backoff[%d] = %v, got %v", i, expected, cfg.backoff[i])
+					if cfg.Worker.BackoffSchedule[i] != expected {
+						t.Errorf("Expected BackoffSchedule[%d] = %v, got %v", i, expected, cfg.Worker.BackoffSchedule[i])
 					}
 				}
 			},
@@ -269,7 +122,7 @@ func TestReadRetryCfg(t *testing.T) {
 			envVars: map[string]string{
 				"BACKOFF_SCHEDULE": "invalid,also-invalid",
 			},
-			validate: func(t *testing.T, cfg retryCfg) {
+			validate: func(t *testing.T, cfg config.Config) {
 				// Should fall back to default schedule
 				expectedSchedule := []time.Duration{
 					time.Second,
@@ -279,19 +132,19 @@ func TestReadRetryCfg(t *testing.T) {
 					4 * time.Minute,
 					10 * time.Minute,
 				}
-				if len(cfg.backoff) != len(expectedSchedule) {
-					t.Errorf("Expected fallback to default schedule length %d, got %d", len(expectedSchedule), len(cfg.backoff))
+				if len(cfg.Worker.BackoffSchedule) != len(expectedSchedule) {
+					t.Errorf("Expected fallback to default schedule length %d, got %d", len(expectedSchedule), len(cfg.Worker.BackoffSchedule))
 				}
 			},
 		},
 		{
 			name: "DLQ topic case insensitive",
 			envVars: map[string]string{
-				"PUBLISH_DLQ_TOPIC": "TRUE",
+				"PUBLISH_DLQ_TOPIC": "true",
 			},
-			validate: func(t *testing.T, cfg retryCfg) {
-				if cfg.publishDLQ != true {
-					t.Errorf("Expected publishDLQ true for 'TRUE', got %v", cfg.publishDLQ)
+			validate: func(t *testing.T, cfg config.Config) {
+				if cfg.Worker.PublishDLQ != true {
+					t.Errorf("Expected PublishDLQ true for 'true', got %v", cfg.Worker.PublishDLQ)
 				}
 			},
 		},
@@ -310,7 +163,7 @@ func TestReadRetryCfg(t *testing.T) {
 				os.Setenv(k, v)
 			}
 
-			cfg := readRetryCfg()
+			cfg := config.FromEnv()
 			tt.validate(t, cfg)
 		})
 	}
@@ -573,44 +426,47 @@ func (e *networkError) Error() string {
 	return e.message
 }
 
-func TestConstants(t *testing.T) {
-	// Test that constants are defined correctly
-	if topic != "deliveries" {
-		t.Errorf("Expected topic 'deliveries', got %q", topic)
+func TestNSQConfigDefaults(t *testing.T) {
+	// Test that NSQ configuration defaults are defined correctly
+	cfg := config.FromEnv()
+	if cfg.NSQ.DeliveriesTopic != "deliveries" {
+		t.Errorf("Expected DeliveriesTopic 'deliveries', got %q", cfg.NSQ.DeliveriesTopic)
 	}
-	if channel != "workers" {
-		t.Errorf("Expected channel 'workers', got %q", channel)
+	if cfg.NSQ.WorkerChannel != "workers" {
+		t.Errorf("Expected WorkerChannel 'workers', got %q", cfg.NSQ.WorkerChannel)
 	}
-	if dlqTopic != "deliveries_dlq" {
-		t.Errorf("Expected dlqTopic 'deliveries_dlq', got %q", dlqTopic)
+	if cfg.NSQ.DLQTopic != "deliveries_dlq" {
+		t.Errorf("Expected DLQTopic 'deliveries_dlq', got %q", cfg.NSQ.DLQTopic)
 	}
-	if sigHeader != "X-HarborHook-Signature" {
-		t.Errorf("Expected sigHeader 'X-HarborHook-Signature', got %q", sigHeader)
+	if cfg.NSQ.SignatureHeader != "X-HarborHook-Signature" {
+		t.Errorf("Expected SignatureHeader 'X-HarborHook-Signature', got %q", cfg.NSQ.SignatureHeader)
 	}
-	if tsHeader != "X-HarborHook-Timestamp" {
-		t.Errorf("Expected tsHeader 'X-HarborHook-Timestamp', got %q", tsHeader)
+	if cfg.NSQ.TimestampHeader != "X-HarborHook-Timestamp" {
+		t.Errorf("Expected TimestampHeader 'X-HarborHook-Timestamp', got %q", cfg.NSQ.TimestampHeader)
 	}
 }
 
-func TestRetryCfgStruct(t *testing.T) {
-	// Test that the retryCfg struct can be created and used
-	cfg := retryCfg{
-		maxAttempts: 5,
-		backoff:     []time.Duration{time.Second, time.Minute},
-		jitterPct:   0.1,
-		publishDLQ:  true,
+func TestWorkerConfigStruct(t *testing.T) {
+	// Test that the Worker config struct works correctly
+	cfg := config.Config{
+		Worker: config.Worker{
+			MaxAttempts:     5,
+			BackoffSchedule: []time.Duration{time.Second, time.Minute},
+			JitterPercent:   0.1,
+			PublishDLQ:      true,
+		},
 	}
 
-	if cfg.maxAttempts != 5 {
-		t.Errorf("Expected maxAttempts 5, got %d", cfg.maxAttempts)
+	if cfg.Worker.MaxAttempts != 5 {
+		t.Errorf("Expected MaxAttempts 5, got %d", cfg.Worker.MaxAttempts)
 	}
-	if len(cfg.backoff) != 2 {
-		t.Errorf("Expected backoff length 2, got %d", len(cfg.backoff))
+	if len(cfg.Worker.BackoffSchedule) != 2 {
+		t.Errorf("Expected BackoffSchedule length 2, got %d", len(cfg.Worker.BackoffSchedule))
 	}
-	if cfg.jitterPct != 0.1 {
-		t.Errorf("Expected jitterPct 0.1, got %f", cfg.jitterPct)
+	if cfg.Worker.JitterPercent != 0.1 {
+		t.Errorf("Expected JitterPercent 0.1, got %f", cfg.Worker.JitterPercent)
 	}
-	if cfg.publishDLQ != true {
-		t.Errorf("Expected publishDLQ true, got %v", cfg.publishDLQ)
+	if cfg.Worker.PublishDLQ != true {
+		t.Errorf("Expected PublishDLQ true, got %v", cfg.Worker.PublishDLQ)
 	}
 }

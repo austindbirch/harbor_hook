@@ -36,7 +36,6 @@ func TestMustRegister(t *testing.T) {
 			RecordDelivery("success", "test-tenant", "test-endpoint", 100*time.Millisecond)
 			RecordRetry("timeout")
 			RecordDLQ("max_retries")
-			UpdateWorkerBacklog(5)
 			UpdateNSQTopicDepth("test-topic", "test-channel", 3)
 
 			// Verify all metrics are registered by checking gather
@@ -49,7 +48,6 @@ func TestMustRegister(t *testing.T) {
 				"harborhook_events_published_total",
 				"harborhook_deliveries_total",
 				"harborhook_delivery_latency_seconds",
-				"harborhook_worker_backlog",
 				"harborhook_retries_total",
 				"harborhook_dlq_total",
 				"harborhook_nsq_topic_depth",
@@ -318,41 +316,6 @@ func TestRecordDLQ(t *testing.T) {
 	}
 }
 
-func TestUpdateWorkerBacklog(t *testing.T) {
-	tests := []struct {
-		name  string
-		count float64
-	}{
-		{
-			name:  "zero backlog",
-			count: 0,
-		},
-		{
-			name:  "positive backlog",
-			count: 42,
-		},
-		{
-			name:  "large backlog",
-			count: 10000,
-		},
-		{
-			name:  "floating point backlog",
-			count: 123.45,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			UpdateWorkerBacklog(tt.count)
-
-			// Verify gauge value
-			value := testutil.ToFloat64(WorkerBacklog)
-			if value != tt.count {
-				t.Errorf("UpdateWorkerBacklog() gauge value = %f, want %f", value, tt.count)
-			}
-		})
-	}
-}
 
 func TestUpdateNSQTopicDepth(t *testing.T) {
 	// Reset metric before testing
@@ -409,7 +372,6 @@ func TestMetricsIntegration(t *testing.T) {
 	RecordHTTPDelivery("tenant-integration", "endpoint-integration", "200", 50*time.Millisecond)
 	RecordRetry("timeout")
 	RecordDLQ("max_retries_exceeded")
-	UpdateWorkerBacklog(5)
 	UpdateNSQTopicDepth("deliveries", "worker", 3)
 
 	// Gather metrics and verify they're present
@@ -431,7 +393,6 @@ func TestMetricsIntegration(t *testing.T) {
 	requiredMetrics := []string{
 		"harborhook_events_published_total",
 		"harborhook_deliveries_total",
-		"harborhook_worker_backlog",
 	}
 
 	for _, metric := range requiredMetrics {
@@ -501,7 +462,6 @@ func TestPrometheusTextOutput(t *testing.T) {
 
 	// Record some test data
 	RecordEventPublished("test-tenant")
-	UpdateWorkerBacklog(42)
 
 	// Get metrics in Prometheus text format
 	metricFamilies, err := registry.Gather()

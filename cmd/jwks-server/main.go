@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -56,13 +55,13 @@ func init() {
 			log.Fatalf("Failed to generate RSA key: %v", err)
 		}
 
-		// Output the private key for use in other services
+		// Store private key for use in other services
 		privateKeyDER := x509.MarshalPKCS1PrivateKey(privateKey)
-		privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		_ = pem.EncodeToMemory(&pem.Block{
 			Type:  "RSA PRIVATE KEY",
 			Bytes: privateKeyDER,
 		})
-		fmt.Printf("Generated JWT Private Key:\n%s\n", privateKeyPEM)
+		log.Printf("Generated new RSA key pair for JWT signing")
 	}
 
 	publicKey = &privateKey.PublicKey
