@@ -66,7 +66,7 @@ func InitTracing(ctx context.Context, serviceName string) (func(), error) {
 	}, nil
 }
 
-// GetTracer returns a tracer for the Harbor Hook application
+// GetTracer returns a tracer for the Harborhook application
 func GetTracer() oteltrace.Tracer {
 	return otel.Tracer(TracerName)
 }
@@ -75,11 +75,11 @@ func GetTracer() oteltrace.Tracer {
 func StartSpan(ctx context.Context, spanName string, attrs ...attribute.KeyValue) (context.Context, oteltrace.Span) {
 	tracer := GetTracer()
 	ctx, span := tracer.Start(ctx, spanName)
-	
+
 	if len(attrs) > 0 {
 		span.SetAttributes(attrs...)
 	}
-	
+
 	return ctx, span
 }
 

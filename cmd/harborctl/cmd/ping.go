@@ -12,8 +12,8 @@ import (
 // pingCmd represents the ping command
 var pingCmd = &cobra.Command{
 	Use:   "ping",
-	Short: "Ping the Harbor Hook service",
-	Long:  `Send a ping request to verify the Harbor Hook service is running and accessible.`,
+	Short: "Ping the Harborhook service",
+	Long:  `Send a ping request to verify the Harborhook service is running and accessible.`,
 	Annotations: map[string]string{
 		ascii.AnnotationKey: ascii.Ping,
 	},

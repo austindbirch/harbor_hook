@@ -110,9 +110,9 @@
     - Click a trace to follow e2e path, show logs correlated by trace_id
     - Trigger burn alert by making receiver fail for a short window, show alert firing
 - AC: 
-    - [ ] Dashboards load from repo JSON
-    - [ ] Traces show all spans
-    - [ ] Alerts evaluate without errors
+    - [x] Dashboards load from repo JSON
+    - [x] Traces show all spans
+    - [x] Alerts evaluate without errors
 
 ---
 ## Phase 6: Flow Control and Protection

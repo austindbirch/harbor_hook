@@ -34,7 +34,7 @@ EVENT_TYPE="demo.event"
 SERVER_HOST=${SERVER_HOST:-"localhost:8443"}  # HTTPS gateway
 JWKS_HOST=${JWKS_HOST:-"localhost:8082"}      # JWT token server
 
-echo "🚀 Harbor Hook CLI Demo (with JWT Authentication)"
+echo "🚀 Harborhook CLI Demo (with JWT Authentication)"
 echo "=================================================="
 
 # Function to get JWT token

@@ -122,7 +122,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-print_step "Harbor Hook DLQ Replay Tool (with JWT Authentication)"
+print_step "Harborhook DLQ Replay Tool (with JWT Authentication)"
 echo "====================================================="
 echo "Server: $SERVER_HOST (HTTPS)"
 echo "JWKS server: $JWKS_HOST"

@@ -1,5 +1,5 @@
 route:
-  group_by: ['alertname', 'severity']
+  group_by: ['alert_type', 'severity']
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
@@ -12,11 +12,12 @@ route:
       group_wait: 0s
       repeat_interval: 15m
 
-    # SLO burn rate alerts
+    # SLO burn rate alerts - group all SLO alerts together
     - match:
-        alertname: HarborHookSLOBurnRateHigh
+        alert_type: slo_burn_rate
       receiver: 'discord-slo'
       group_wait: 5s
+      group_interval: 30s
       repeat_interval: 30m
 
     # System alerts
@@ -32,8 +33,8 @@ receivers:
     discord_configs:
       - webhook_url: 'https://discord.com/api/webhooks/1417700305403121765/BQ_5IC7hzkZCDVLWwda76Qu0ME_DWZCXrezMBb4Cv-swopYddE20dA59uuDjBtIiirBQ'
         send_resolved: true
-        username: 'Harbor Hook Alerts'
-        title: '⚡ Harbor Hook Alert'
+        username: 'Harborhook Alerts'
+        title: '⚡ Harborhook Alert'
         message: |
           **Alert:** {{ with index .Alerts 0 }}{{ .Annotations.summary }}{{ end }}
           **Description:** {{ with index .Alerts 0 }}{{ .Annotations.description }}{{ end }}
@@ -43,7 +44,7 @@ receivers:
     discord_configs:
       - webhook_url: 'https://discord.com/api/webhooks/1417700305403121765/BQ_5IC7hzkZCDVLWwda76Qu0ME_DWZCXrezMBb4Cv-swopYddE20dA59uuDjBtIiirBQ'
         send_resolved: true
-        username: 'Harbor Hook Critical'
+        username: 'Harborhook Critical'
         title: '🚨 CRITICAL ALERT 🚨'
         message: |
           **Alert:** {{ with index .Alerts 0 }}{{ .Annotations.summary }}{{ end }}
@@ -55,7 +56,7 @@ receivers:
     discord_configs:
       - webhook_url: 'https://discord.com/api/webhooks/1417700305403121765/BQ_5IC7hzkZCDVLWwda76Qu0ME_DWZCXrezMBb4Cv-swopYddE20dA59uuDjBtIiirBQ'
         send_resolved: true
-        username: 'Harbor Hook SLO'
+        username: 'Harborhook SLO'
         title: '📊 SLO Burn Rate Alert'
         message: |
           **SLO Budget Alert**
@@ -67,7 +68,7 @@ receivers:
     discord_configs:
       - webhook_url: 'https://discord.com/api/webhooks/1417700305403121765/BQ_5IC7hzkZCDVLWwda76Qu0ME_DWZCXrezMBb4Cv-swopYddE20dA59uuDjBtIiirBQ'
         send_resolved: true
-        username: 'Harbor Hook System'
+        username: 'Harborhook System'
         title: '⚙️ System Alert'
         message: |
           **Alert:** {{ with index .Alerts 0 }}{{ .Annotations.summary }}{{ end }}
@@ -84,7 +85,7 @@ receivers:
   #     - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
   #       channel: '#harborhook-alerts'
   #       color: 'danger'
-  #       title: 'Harbor Hook Critical Alert'
+  #       title: 'Harborhook Critical Alert'
   #       text: |
   #         {{ range .Alerts }}
   #         *Alert:* {{ .Annotations.summary }}
@@ -99,7 +100,7 @@ receivers:
   #     - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
   #       channel: '#harborhook-slo'
   #       color: 'warning'
-  #       title: 'Harbor Hook SLO Alert'
+  #       title: 'Harborhook SLO Alert'
   #       text: |
   #         {{ range .Alerts }}
   #         *SLO Burn Rate Alert*
@@ -117,8 +118,15 @@ receivers:
   #     - to: 'ops@example.com'
 
 inhibit_rules:
+  # Critical alerts inhibit warning alerts of same type
   - source_match:
       severity: 'critical'
     target_match:
       severity: 'warning'
-    equal: ['alertname', 'tenant_id']
+    equal: ['alert_type', 'tenant_id']
+  # High burn rate inhibits moderate burn rate
+  - source_match:
+      alertname: 'HarborHookSLOBurnRateHigh'
+    target_match:
+      alertname: 'HarborHookSLOBurnRateModerate'
+    equal: ['tenant_id']

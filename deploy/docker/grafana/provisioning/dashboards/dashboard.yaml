@@ -3,7 +3,7 @@ apiVersion: 1
 providers:
   - name: 'HarborHook Dashboards'
     orgId: 1
-    folder: 'Harbor Hook'
+    folder: 'Harborhook'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10

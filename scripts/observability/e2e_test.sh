@@ -63,7 +63,7 @@ TEMPO_URL="http://localhost:3200"
 LOKI_URL="http://localhost:3100"
 NSQ_ADMIN_URL="http://localhost:4171"
 
-print_header "🧪 Harbor Hook Observability E2E Tests"
+print_header "🧪 Harborhook Observability E2E Tests"
 
 # Function to get JWT token
 get_jwt_token() {
@@ -127,8 +127,8 @@ test_service_health() {
         print_fail "NSQ Admin health check failed"
     fi
     
-    # Test Harbor Hook services
-    print_test "Testing Harbor Hook JWT service"
+    # Test Harborhook services
+    print_test "Testing Harborhook JWT service"
     local jwt_token=$(get_jwt_token)
     if [[ "$jwt_token" != "null" && -n "$jwt_token" ]]; then
         print_pass "JWT service is working"
@@ -137,12 +137,12 @@ test_service_health() {
         print_fail "JWT service is not working"
     fi
     
-    print_test "Testing Harbor Hook ingest service via gateway"
+    print_test "Testing Harborhook ingest service via gateway"
     if [ -f "./bin/harborctl" ]; then
         if ./bin/harborctl ping --server "$SERVER_HOST" >/dev/null 2>&1; then
-            print_pass "Harbor Hook ingest service is healthy"
+            print_pass "Harborhook ingest service is healthy"
         else
-            print_fail "Harbor Hook ingest service health check failed"
+            print_fail "Harborhook ingest service health check failed"
         fi
     else
         print_fail "harborctl binary not found - cannot test ingest service"
@@ -153,15 +153,15 @@ test_service_health() {
 test_metrics_collection() {
     print_header "📊 Metrics Collection Tests"
     
-    # Test Prometheus scraping Harbor Hook metrics
+    # Test Prometheus scraping Harborhook metrics
     print_test "Testing Prometheus metrics scraping"
     local metrics_response=$(curl -s "$PROMETHEUS_URL/api/v1/label/__name__/values" 2>/dev/null || echo '{}')
     local harborhook_metrics=$(echo "$metrics_response" | jq -r '.data[]' 2>/dev/null | grep -c "harborhook" || echo "0")
     
     if [ "$harborhook_metrics" -gt 0 ]; then
-        print_pass "Found $harborhook_metrics Harbor Hook metrics in Prometheus"
+        print_pass "Found $harborhook_metrics Harborhook metrics in Prometheus"
     else
-        print_fail "No Harbor Hook metrics found in Prometheus"
+        print_fail "No Harborhook metrics found in Prometheus"
     fi
     
     # Test specific critical metrics exist
@@ -204,12 +204,12 @@ test_alerting() {
         print_fail "No alert rules loaded in Prometheus"
     fi
     
-    # Check for Harbor Hook specific alerts
+    # Check for Harborhook specific alerts
     local hh_rules=$(echo "$rules_response" | jq -r '.data.groups[].rules[].name' 2>/dev/null | grep -c "HarborHook" || echo "0")
     if [ "$hh_rules" -gt 0 ]; then
-        print_pass "Found $hh_rules Harbor Hook alert rules"
+        print_pass "Found $hh_rules Harborhook alert rules"
     else
-        print_fail "No Harbor Hook alert rules found"
+        print_fail "No Harborhook alert rules found"
     fi
     
     # Test AlertManager configuration

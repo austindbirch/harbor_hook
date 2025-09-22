@@ -39,15 +39,24 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "harborctl",
-	Short: "Harbor Hook CLI - Interact with the Harbor Hook webhook service",
-	Long: `Harbor Hook CLI (harborctl) is a command line tool for interacting with 
-the Harbor Hook webhook delivery service.
+	Short: "Harborhook CLI - Interact with the Harborhook webhook service",
+	Long: `Harborhook CLI (harborctl) is a command line tool for interacting with
+the Harborhook webhook delivery service.
 
-You can use it to publish events, check delivery status, replay deliveries, 
+You can use it to publish events, check delivery status, replay deliveries,
 and manage endpoints and subscriptions.`,
 	Annotations: map[string]string{
 		ascii.AnnotationKey: ascii.Root,
 	},
+	PersistentPreRun: showASCIIArt,
+}
+
+// showASCIIArt displays the ASCII art associated with a command if it exists
+func showASCIIArt(cmd *cobra.Command, args []string) {
+	if art, exists := cmd.Annotations[ascii.AnnotationKey]; exists && art != "" {
+		fmt.Println(art)
+		fmt.Println() // Add a blank line after ASCII art
+	}
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

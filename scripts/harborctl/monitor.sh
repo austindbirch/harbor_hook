@@ -1,5 +1,5 @@
 #!/bin/bash
-# monitor.sh - Real-time monitoring for Harbor Hook deliveries with JWT authentication
+# monitor.sh - Real-time monitoring for Harborhook deliveries with JWT authentication
 
 set -e
 
@@ -72,7 +72,7 @@ ${YELLOW}Monitoring stopped${NC}"
 # Set up signal handling
 trap cleanup INT TERM
 
-print_header "🔍 Harbor Hook Delivery Monitor (with JWT Authentication)"
+print_header "🔍 Harborhook Delivery Monitor (with JWT Authentication)"
 echo "=========================================================="
 echo "Refresh interval: ${REFRESH_INTERVAL}s"
 echo "Server: $SERVER_HOST (HTTPS)"
@@ -101,7 +101,7 @@ while true; do
 
     # Clear screen and show timestamp
     clear
-    print_header "🔍 Harbor Hook Delivery Monitor"
+    print_header "🔍 Harborhook Delivery Monitor"
     echo "Last updated: $(date)"
     echo "Token status: $([ -n "$JWT_TOKEN" ] && echo "✓ Valid" || echo "✗ Invalid")"
     echo "================================================"

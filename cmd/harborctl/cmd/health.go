@@ -13,8 +13,8 @@ import (
 // healthCmd represents the health command
 var healthCmd = &cobra.Command{
 	Use:   "health",
-	Short: "Check the health of the Harbor Hook service",
-	Long:  `Check the health status of the Harbor Hook service using gRPC health checks.`,
+	Short: "Check the health of the Harborhook service",
+	Long:  `Check the health status of the Harborhook service using gRPC health checks.`,
 	Annotations: map[string]string{
 		ascii.AnnotationKey: ascii.Health,
 	},

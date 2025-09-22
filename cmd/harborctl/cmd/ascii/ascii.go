@@ -3,7 +3,7 @@ package ascii
 // AnnotationKey is the key used in command annotations to specify ASCII art
 const AnnotationKey = "asciiArt"
 
-// Root command ASCII art - Harbor Hook main logo
+// Root command ASCII art - Harborhook main logo
 const Root = `
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠄⡠⠀⡂⠂⠄⠠⢀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡄⠪⢐⠐⡐⢐⠠⢈⠐⢐⠀⡂⠁⠢⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀

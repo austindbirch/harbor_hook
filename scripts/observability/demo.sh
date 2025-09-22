@@ -68,7 +68,7 @@ pct() {
   fi
 }
 
-print_header "🔭 Harbor Hook Observability Demo (Phase 5)"
+print_header "🔭 Harborhook Observability Demo (Phase 5)"
 echo "This demo will:"
 echo "• Generate high-volume traffic (success & failure scenarios)"
 echo "• Create dead endpoints for fast DLQ testing (1-2 min vs 15 min)"
@@ -426,33 +426,6 @@ check_alerts() {
     fi
 }
 
-# Show observability stack URLs
-show_observability_urls() {
-    print_header "🌐 Observability Stack URLs"
-    echo "Access these URLs to explore the generated data:"
-    echo ""
-    echo "📊 Grafana (Dashboards, Metrics, Logs, Traces):"
-    echo "   http://localhost:3000"
-    echo "   Default login: admin/admin"
-    echo ""
-    echo "📈 Prometheus (Raw Metrics & Alert Rules):" 
-    echo "   http://localhost:9090"
-    echo ""
-    echo "🚨 AlertManager (Alert Management):"
-    echo "   http://localhost:9093"
-    echo ""
-    echo "🔍 Tempo (Distributed Tracing - via Grafana):"
-    echo "   http://localhost:3200"
-    echo ""
-    echo "📝 Loki (Log Aggregation - via Grafana):"
-    echo "   http://localhost:3100"
-    echo ""
-    echo "🐰 NSQ Admin (Message Queue Monitoring):"
-    echo "   http://localhost:4171"
-    echo ""
-    print_info "🎯 Recommended: Start with Grafana to see pre-configured dashboards"
-}
-
 # Generate realistic varied traffic
 generate_realistic_traffic() {
     print_step "Generating realistic varied traffic patterns..."
@@ -532,9 +505,6 @@ main() {
     
     # Phase 8: Check results
     check_alerts
-
-    # Phase 9: Show access information
-    show_observability_urls
     
     # Final summary
     print_header "✅ Demo Complete!"

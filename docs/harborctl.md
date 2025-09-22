@@ -1,4 +1,4 @@
-# Harbor Hook CLI (harborctl) - Implementation Summary
+# Harborhook CLI (harborctl) - Implementation Summary
 
 ## Core CLI Structure (`cmd/harborctl/`)
 

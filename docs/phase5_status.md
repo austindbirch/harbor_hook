@@ -134,7 +134,7 @@ This approach builds incrementally, with each step adding value while setting up
     - name: 'system-alerts'
       email_configs:
         - to: 'your-email@gmail.com'  # ← Change this to your email
-          subject: 'Harbor Hook System Alert'
+          subject: 'Harborhook System Alert'
           body: |
             {{ range .Alerts }}
             Alert: {{ .Annotations.summary }}
@@ -163,7 +163,7 @@ This approach builds incrementally, with each step adding value while setting up
         - api_url: '{{ .GlobalURL }}'
           channel: '#your-alerts-channel'  # ← Change channel name
           color: 'danger'
-          title: 'Harbor Hook Critical Alert'
+          title: 'Harborhook Critical Alert'
           # ... rest stays the same
 
   3. For Testing (Webhook to your service):

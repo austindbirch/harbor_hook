@@ -1,6 +1,6 @@
-# Harbor Hook Observability Demo & Testing
+# Harborhook Observability Demo & Testing
 
-This directory contains scripts to demonstrate and validate the Phase 5 observability features of Harbor Hook.
+This directory contains scripts to demonstrate and validate the Phase 5 observability features of Harborhook.
 
 ## Scripts
 
@@ -43,7 +43,7 @@ TRAFFIC_DURATION=300 HIGH_TRAFFIC_RPS=25 FAILURE_PERCENTAGE=30 ./scripts/observa
 
 **What it tests**:
 - 🏥 **Service Health**: All observability services are running and healthy
-- 📊 **Metrics Collection**: Prometheus is scraping Harbor Hook metrics
+- 📊 **Metrics Collection**: Prometheus is scraping Harborhook metrics
 - 🚨 **Alert System**: Alert rules are loaded and AlertManager is configured
 - 📝 **Log Aggregation**: Loki is collecting and indexing logs
 - 🔍 **Distributed Tracing**: Tempo is accessible and configured for trace ingestion
@@ -56,7 +56,7 @@ TRAFFIC_DURATION=300 HIGH_TRAFFIC_RPS=25 FAILURE_PERCENTAGE=30 ./scripts/observa
 ./scripts/observability/e2e_test.sh
 
 # Example output:
-# 🧪 Harbor Hook Observability E2E Tests
+# 🧪 Harborhook Observability E2E Tests
 # ==============================================
 # 
 # 🏥 Service Health Tests
@@ -77,7 +77,7 @@ TRAFFIC_DURATION=300 HIGH_TRAFFIC_RPS=25 FAILURE_PERCENTAGE=30 ./scripts/observa
 ## Prerequisites
 
 Both scripts require:
-- Harbor Hook services running (ingest, worker, jwks-server)
+- Harborhook services running (ingest, worker, jwks-server)
 - Observability stack running (Prometheus, Grafana, Loki, Tempo, AlertManager)
 - `harborctl` binary built (`make build-cli`)
 - Dependencies: `curl`, `jq`, `bc`, `nc`
@@ -158,7 +158,7 @@ Both scripts require:
 
 These scripts validate the complete Phase 5 observability implementation:
 
-- ✅ **Metrics**: Custom Harbor Hook metrics with business KPIs
+- ✅ **Metrics**: Custom Harborhook metrics with business KPIs
 - ✅ **Tracing**: OpenTelemetry instrumentation with correlation
 - ✅ **Logging**: Structured logging with trace correlation  
 - ✅ **Alerting**: SLO-based alerts with multi-window burn rates

@@ -7,7 +7,7 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags="-w -s -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.Version=$(VERSION) -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.GitCommit=$(GIT_COMMIT) -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.BuildTime=$(BUILD_TIME)"
 
-.PHONY: proto build lint install-cli uninstall-cli certs token up down up-full down-full logs logs-gateway logs-obs clean help
+.PHONY: proto build lint install-cli uninstall-cli certs token up down up-full down-full restart logs logs-gateway logs-obs clean help
 
 # Go commands
 proto:
@@ -74,6 +74,8 @@ down-full:
 	docker system prune -a -f --volumes
 	@echo "✅ Cleanup completed successfully!"
 
+restart: down up
+
 logs:
 	@echo "Viewing docker logs..."
 	$(COMPOSE) logs -f ingest worker fake-receiver
@@ -93,7 +95,7 @@ clean:
 
 # Help target to document all available commands
 help:
-	@echo "Harbor Hook Development Commands"
+	@echo "Harborhook Development Commands"
 	@echo "================================"
 	@echo ""
 	@echo "🏗️  Building & Development:"
@@ -114,6 +116,7 @@ help:
 	@echo "  down         - Stop containers with basic pruning"
 	@echo "  up-full      - Start containers with full rebuild"
 	@echo "  down-full    - Stop containers with full cleanup"
+	@echo "  restart      - Restart all containers"
 	@echo "  logs         - View main service logs"
 	@echo "  logs-gateway - View gateway service logs only"
 	@echo "  logs-obs     - View observability service logs only"
