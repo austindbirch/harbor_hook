@@ -115,23 +115,7 @@
     - [x] Alerts evaluate without errors
 
 ---
-## Phase 6: Flow Control and Protection
-- End Goal: Protect the system and receivers with fine-grained flow control
-- What we add:
-    - Per‑endpoint token bucket (e.g., 10 rps, burst 20) enforced in workers, excess tasks requeued with short delay
-	- Circuit breaker per endpoint: open on consecutive failures or elevated p95 latency, half‑open on cooldown
-	- Max in‑flight per endpoint (e.g., 4) to bound concurrency, tune NSQ consumer `MaxInFlight` and worker pools
-	- Per‑tenant quotas (soft caps) with backpressure signals and metrics
-- Demo:
-    - Hammer a slow endpoint, watch rate limiting and `circuit_open = 1` metric
-    - After cooldown, half open probes allow recovery, metrics reflect close
-    - Show fair sharing across two tenants when one misbehaves (no noisy-neighbor starvation)
-- AC: 
-    - [ ] System maintains throughput without runaway retries
-    - [ ] Misbehaving endpoints are isolated, healthy tenants continue to meet SLO
-
----
-## Phase 7: K8s and CI/CD
+## Phase 6: K8s and CI/CD
 - End Goal: One-command cluster bring-up with Helm, automated e2e in CLI
 - What we add:
     - Helm charts for Envoy, Ingest, Worker, Postgres, NSQ, Grafana stack
@@ -150,7 +134,7 @@
     - [ ] CI artifacts (k8s test logs, screenshots)
 
 ---
-## Phase 8: Runbooks, Documentation, Data Seeding
+## Phase 7: Runbooks, Documentation, Data Seeding
 - End Goal: Show that this can be run like a platform: safe deploys, crisp runbooks
 - What we add:
     - Runbooks checked in: DLQ spike, backlog growth, high latency, auth/JWT rotation, cert rotation
@@ -160,13 +144,3 @@
     - Go through quickstart process in a new env
 - AC:
     - [ ] Runbooks are actionable
-
----
-## Phase 9: Analytics API Stretch Goal
-- End Goal: Add an analytics API that allows users to query metrics on a per-tenant basis
-- What we add:
-    - `GET /v1/tenants/{tenant_id}/analytics` --> success rates, latency quantiles, retry causes
-- Demo:
-    - Call `/analytics` --> analytics data for a given `tenant_id`
-- AC:
-    - [ ] Analytics API returns accurate data for a `tenant_id`

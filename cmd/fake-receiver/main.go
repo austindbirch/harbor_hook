@@ -17,7 +17,6 @@ import (
 	"github.com/austindbirch/harbor_hook/internal/config"
 )
 
-
 var (
 	reqCount = atomic.Int64{}
 )

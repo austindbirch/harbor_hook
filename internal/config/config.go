@@ -17,13 +17,13 @@ type DB struct {
 }
 
 type NSQ struct {
-	NsqdTCPAddr       string // e.g. nsqd:4150
-	LookupHTTPAddr    string // e.g. http://nsqlookupd:4161
-	DeliveriesTopic   string // NSQ topic for webhook deliveries
-	DLQTopic          string // Dead letter queue topic
-	WorkerChannel     string // NSQ channel name for workers
-	SignatureHeader   string // HTTP header for webhook signature
-	TimestampHeader   string // HTTP header for webhook timestamp
+	NsqdTCPAddr     string // e.g. nsqd:4150
+	LookupHTTPAddr  string // e.g. http://nsqlookupd:4161
+	DeliveriesTopic string // NSQ topic for webhook deliveries
+	DLQTopic        string // Dead letter queue topic
+	WorkerChannel   string // NSQ channel name for workers
+	SignatureHeader string // HTTP header for webhook signature
+	TimestampHeader string // HTTP header for webhook timestamp
 }
 
 type Worker struct {

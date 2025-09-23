@@ -100,9 +100,7 @@ func initConfig() {
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
+	viper.ReadInConfig()
 
 	// Override global variables with config values if flags weren't explicitly set
 	if !rootCmd.PersistentFlags().Changed("server") {
