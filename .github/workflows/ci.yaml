@@ -19,6 +19,15 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: latest
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate protobufs
+        run: make proto
+
       - name: Build
         run: make build
 
