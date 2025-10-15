@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "harborhook.fullname" . }}-envoy
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy
+spec:
+  type: {{ .Values.envoy.service.type }}
+  ports:
+    - port: {{ .Values.envoy.service.port }}
+      targetPort: https
+      protocol: TCP
+      name: https
+    - port: 9901
+      targetPort: admin
+      protocol: TCP
+      name: admin
+  selector:
+    {{- include "harborhook.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy

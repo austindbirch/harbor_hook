@@ -1,0 +1,40 @@
+{{- /*
+This NOTES.txt file is displayed to the user after a successful helm install.
+*/ -}}
+
+Harborhook has been installed.
+
+**IMPORTANT:** Before the application can function correctly, you must create a secret containing the TLS certificates for the Envoy gateway.
+
+1. **Generate the certificates:**
+   If you haven't already, run the certificate generation script from the original docker deployment directory:
+   
+   cd deploy/docker/envoy/certs
+   ./generate_certs.sh
+   cd ../../../..
+
+2. **Create the Kubernetes Secret:**
+   Use the following kubectl command to create the secret from the generated files. This command assumes you are at the root of the harbor_hook project.
+
+   kubectl create secret generic {{ .Values.ingest.certsSecretName | default (printf "%s-certs" (include "harborhook.fullname" .)) }} \
+     --from-file=ca.crt=./deploy/docker/envoy/certs/ca.crt \
+     --from-file=server.crt=./deploy/docker/envoy/certs/server.crt \
+     --from-file=server.key=./deploy/docker/envoy/certs/server.key \
+     --from-file=client.crt=./deploy/docker/envoy/certs/client.crt \
+     --from-file=client.key=./deploy/docker/envoy/certs/client.key
+
+3. **Accessing Services:**
+
+   - **Envoy Gateway (API):**
+     Get the external IP for the Envoy service:
+     kubectl get svc {{ include "harborhook.fullname" . }}-envoy -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+   - **NSQAdmin UI:**
+     You can port-forward to the nsqadmin service to view the queue status:
+     kubectl port-forward svc/{{ include "harborhook.fullname" . }}-nsqadmin 4171:4171
+     Then open http://localhost:4171 in your browser.
+
+   - **Grafana UI:**
+     If you install the observability stack, you can port-forward to Grafana:
+     kubectl port-forward svc/{{ .Release.Name }}-grafana 3000:3000
+     Then open http://localhost:3000 in your browser.

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "harborhook.fullname" . }}-fake-receiver
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fake-receiver
+spec:
+  replicas: {{ .Values.fakeReceiver.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "harborhook.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: fake-receiver
+  template:
+    metadata:
+      labels:
+        {{- include "harborhook.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: fake-receiver
+    spec:
+      serviceAccountName: {{ include "harborhook.serviceAccountName" . }}
+      containers:
+        - name: fake-receiver
+          image: "{{ .Values.fakeReceiver.image.repository }}:{{ .Values.fakeReceiver.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.fakeReceiver.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.fakeReceiver.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "harborhook.fullname" . }}-fake-receiver-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10

@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "harborhook.fullname" . }}-ingest
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.ingest.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.ingest.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "harborhook.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest

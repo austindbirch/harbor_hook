@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "harborhook.fullname" . }}-envoy
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy
+spec:
+  replicas: {{ .Values.envoy.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "harborhook.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: envoy
+  template:
+    metadata:
+      labels:
+        {{- include "harborhook.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: envoy
+    spec:
+      serviceAccountName: {{ include "harborhook.serviceAccountName" . }}
+      containers:
+        - name: envoy
+          image: "{{ .Values.envoy.image.repository }}:{{ .Values.envoy.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.envoy.image.pullPolicy }}
+          ports:
+            - name: https
+              containerPort: {{ .Values.envoy.service.port }}
+              protocol: TCP
+            - name: admin
+              containerPort: 9901
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/envoy
+              readOnly: true
+            - name: certs
+              mountPath: /etc/certs
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "harborhook.fullname" . }}-envoy-config
+        - name: certs
+          secret:
+            secretName: {{ .Values.envoy.certsSecretName | default (printf "%s-certs" (include "harborhook.fullname" .)) }}

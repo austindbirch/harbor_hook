@@ -1,0 +1,17 @@
+apiVersion: v2
+name: harborhook
+description: A Helm chart for Harborhook, the multi-tenant webhook delivery system.
+# application | library
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+- name: postgresql
+  version: "14.0.0" # Using a known stable version
+  repository: "https://charts.bitnami.com/bitnami"
+  alias: postgres # To match our service name convention
+- name: nsq
+  version: "0.0.11" # Using a known stable version
+  repository: "https://nsqio.github.io/helm-chart"
+  alias: nsq # To match our service name convention

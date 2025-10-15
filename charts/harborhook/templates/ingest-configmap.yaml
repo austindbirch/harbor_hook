@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "harborhook.fullname" . }}-ingest-config
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingest
+data:
+  APP_NAME: "ingest"
+  OTEL_SERVICE_NAME: "harborhook-ingest"
+  HTTP_PORT: ":{{ .Values.ingest.service.httpPort }}"
+  GRPC_PORT: ":{{ .Values.ingest.service.grpcPort }}"
+  DB_USER: {{ .Values.config.db.user | quote }}
+  DB_HOST: {{ .Values.config.db.host | quote }}
+  DB_PORT: {{ .Values.config.db.port | quote }}
+  DB_NAME: {{ .Values.config.db.name | quote }}
+  DB_CONN_MAX_LIFETIME: "1h"
+  DB_MAX_IDLE_CONNS: "10"
+  DB_MAX_OPEN_CONNS: "25"
+  JWT_ISSUER: "harborhook"
+  JWT_AUDIENCE: "harborhook-api"
+  ENABLE_TLS: "false"
+  NSQD_TCP_ADDR: {{ .Values.config.nsq.nsqdTcpAddr | quote }}
+  NSQ_LOOKUP_HTTP_ADDR: {{ .Values.config.nsq.nsqLookupHttpAddr | quote }}
+  NSQ_DELIVERIES_TOPIC: {{ .Values.config.nsq.deliveriesTopic | quote }}
+  NSQ_DLQ_TOPIC: {{ .Values.config.nsq.dlqTopic | quote }}
+  NSQ_WORKER_CHANNEL: {{ .Values.config.nsq.workerChannel | quote }}
+  WEBHOOK_SIGNATURE_HEADER: {{ .Values.config.webhook.signatureHeader | quote }}
+  WEBHOOK_TIMESTAMP_HEADER: {{ .Values.config.webhook.timestampHeader | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
+  # DB_PASS will be sourced from a secret

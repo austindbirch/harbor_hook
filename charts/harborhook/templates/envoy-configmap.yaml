@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "harborhook.fullname" . }}-envoy-config
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy
+data:
+  envoy.yaml: |
+    static_resources:
+      listeners:
+      - name: https_listener
+        address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: {{ .Values.envoy.service.port }}
+        listener_filters:
+        - name: envoy.filters.listener.tls_inspector
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+        filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                - certificate_chain:
+                    filename: /etc/certs/server.crt
+                  private_key:
+                    filename: /etc/certs/server.key
+                validation_context:
+                  trusted_ca:
+                    filename: /etc/certs/ca.crt
+          filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: https_ingress
+              codec_type: AUTO
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: harborhook_service
+                  domains: ["*"]
+                  routes:
+                  - match:
+                      prefix: "/"
+                    route:
+                      cluster: harborhook_backend
+                      timeout: 60s
+                      retry_policy:
+                        retry_on: 5xx,reset,connect-failure,refused-stream
+                        num_retries: 3
+              http_filters:
+              - name: envoy.filters.http.buffer
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+                  max_request_bytes: 2097152
+              - name: envoy.filters.http.compressor
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.compressor.v3.Compressor
+                  response_direction_config:
+                    common_config:
+                      min_content_length: 1024
+                      content_type:
+                      - "application/json"
+                      - "application/grpc"
+                      - "text/plain"
+                  compressor_library:
+                    name: envoy.compression.gzip.compressor
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.compression.gzip.compressor.v3.Gzip
+              - name: envoy.filters.http.jwt_authn
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                  providers:
+                    harborhook_auth:
+                      issuer: "harborhook"
+                      audiences:
+                      - "harborhook-api"
+                      remote_jwks:
+                        http_uri:
+                          uri: "http://{{ include "harborhook.fullname" . }}-jwks-server:{{ .Values.jwksServer.service.port }}/.well-known/jwks.json"
+                          cluster: jwks_cluster
+                          timeout: 5s
+                        cache_duration: 300s
+                      forward: true
+                      payload_in_metadata: "jwt_payload"
+                  rules:
+                  - match:
+                      prefix: "/v1/ping"
+                  - match:
+                      prefix: "/"
+                    requires:
+                      provider_name: "harborhook_auth"
+              - name: envoy.filters.http.lua
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                  inline_code: |
+                    function envoy_on_request(request_handle)
+                      local metadata = request_handle:streamInfo():dynamicMetadata()
+                      local jwt_payload = metadata:get("envoy.filters.http.jwt_authn")
+                      
+                      if jwt_payload and jwt_payload["jwt_payload"] then
+                        local payload = jwt_payload["jwt_payload"]
+                        if payload["tenant_id"] then
+                          request_handle:headers():add("x-tenant-id", payload["tenant_id"])
+                        end
+                      end
+                    end
+              - name: envoy.filters.http.local_ratelimit
+                typed_config:
+                  "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+                  type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                  value:
+                    stat_prefix: http_local_rate_limiter
+                    token_bucket:
+                      max_tokens: 2000
+                      tokens_per_fill: 1000
+                      fill_interval: 60s
+                    filter_enabled:
+                      runtime_key: local_rate_limit_enabled
+                      default_value:
+                        numerator: 100
+                        denominator: HUNDRED
+                    filter_enforced:
+                      runtime_key: local_rate_limit_enforced
+                      default_value:
+                        numerator: 100
+                        denominator: HUNDRED
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+      clusters:
+      - name: harborhook_backend
+        connect_timeout: 0.25s
+        type: LOGICAL_DNS
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: harborhook_backend
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{ include "harborhook.fullname" . }}-ingest
+                    port_value: {{ .Values.ingest.service.httpPort }}
+      - name: jwks_cluster
+        connect_timeout: 0.25s
+        type: LOGICAL_DNS
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: jwks_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{ include "harborhook.fullname" . }}-jwks-server
+                    port_value: {{ .Values.jwksServer.service.port }}
+    admin:
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 9901

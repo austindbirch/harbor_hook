@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "harborhook.fullname" . }}-worker
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.worker.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "harborhook.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
