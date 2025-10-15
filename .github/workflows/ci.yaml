@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: go test ./...
+
+  build-and-push-images:
+    name: Build and Push Images
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ingest image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./cmd/ingest/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/ingest:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./cmd/worker/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/worker:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push jwks-server image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./cmd/jwks-server/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/jwks-server:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push fake-receiver image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./cmd/fake-receiver/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/fake-receiver:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push nsq-monitor image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./cmd/nsq-monitor/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/nsq-monitor:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  e2e-test:
+    name: End-to-End Test
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up KinD cluster
+        uses: helm/kind-action@v1.5.0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.10.0
+
+      - name: Generate TLS certificates
+        run: |
+          cd deploy/docker/envoy/certs
+          ./generate_certs.sh
+          cd ../../../..
+
+      - name: Create TLS secret
+        run: |
+          kubectl create secret generic test-harborhook-certs \
+            --from-file=ca.crt=./deploy/docker/envoy/certs/ca.crt \
+            --from-file=server.crt=./deploy/docker/envoy/certs/server.crt \
+            --from-file=server.key=./deploy/docker/envoy/certs/server.key \
+            --from-file=client.crt=./deploy/docker/envoy/certs/client.crt \
+            --from-file=client.key=./deploy/docker/envoy/certs/client.key
+
+      - name: Update Helm dependencies
+        run: helm dependency update ./charts/harborhook
+
+      - name: Install Harborhook chart
+        run: |
+          helm install test ./charts/harborhook \
+            --set ingest.image.tag=${{ github.sha }} \
+            --set worker.image.tag=${{ github.sha }} \
+            --set jwksServer.image.tag=${{ github.sha }} \
+            --set fakeReceiver.image.tag=${{ github.sha }} \
+            --set nsqMonitor.image.tag=${{ github.sha }}
+
+      - name: Wait for deployments to be ready
+        run: kubectl wait --for=condition=Available --timeout=5m deployment --all
+
+      - name: Run e2e test script
+        run: |
+          echo "Running e2e tests..."
+          # For now, just ping the services
+          kubectl get svc
+          echo "TODO: Implement comprehensive e2e tests"

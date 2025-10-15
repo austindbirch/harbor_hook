@@ -7,7 +7,7 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags="-w -s -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.Version=$(VERSION) -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.GitCommit=$(GIT_COMMIT) -X github.com/austindbirch/harbor_hook/cmd/harborctl/cmd.BuildTime=$(BUILD_TIME)"
 
-.PHONY: proto build lint install-cli uninstall-cli certs token up down up-full down-full restart logs logs-gateway logs-obs clean help
+.PHONY: proto build lint install-cli uninstall-cli certs token up down up-full down-full restart logs logs-gateway logs-obs clean help kind-up-and-test kind-down
 
 # Go commands
 proto:
@@ -93,6 +93,31 @@ clean:
 	docker system prune -af --volumes
 	docker builder prune -f
 
+# Kubernetes commands
+kind-up-and-test:
+	@echo "Creating Kind cluster..."
+	kind create cluster --name harborhook
+	@echo "Generating TLS certificates..."
+	cd deploy/docker/envoy/certs && ./generate_certs.sh && cd ../../../..
+	@echo "Creating TLS secret..."
+	kubectl create secret generic harborhook-certs \
+		--from-file=ca.crt=./deploy/docker/envoy/certs/ca.crt \
+		--from-file=server.crt=./deploy/docker/envoy/certs/server.crt \
+		--from-file=server.key=./deploy/docker/envoy/certs/server.key \
+		--from-file=client.crt=./deploy/docker/envoy/certs/client.crt \
+		--from-file=client.key=./deploy/docker/envoy/certs/client.key
+	@echo "Updating Helm dependencies..."
+	helm dependency update ./charts/harborhook
+	@echo "Installing Harborhook chart..."
+	helm install harborhook ./charts/harborhook
+	@echo "Waiting for deployments to be ready..."
+	kubectl wait --for=condition=Available --timeout=5m deployment --all
+	@echo "✅ Harborhook cluster is up and running!"
+
+kind-down:
+	@echo "Deleting Kind cluster..."
+	kind delete cluster --name harborhook
+
 # Help target to document all available commands
 help:
 	@echo "Harborhook Development Commands"
@@ -121,4 +146,8 @@ help:
 	@echo "  logs-gateway - View gateway service logs only"
 	@echo "  logs-obs     - View observability service logs only"
 	@echo "  clean        - Basic Docker system prune"
+	@echo ""
+	@echo "☸️  Kubernetes Operations:"
+	@echo "  kind-up-and-test - Create a Kind cluster and deploy Harborhook"
+	@echo "  kind-down    - Delete the Kind cluster"
 	@echo ""

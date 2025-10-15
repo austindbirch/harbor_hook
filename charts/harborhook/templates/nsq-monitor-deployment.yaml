@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nsq-monitor
+  labels:
+    app: nsq-monitor
+spec:
+  replicas: {{ .Values.nsqMonitor.replicaCount }}
+  selector:
+    matchLabels:
+      app: nsq-monitor
+  template:
+    metadata:
+      labels:
+        app: nsq-monitor
+    spec:
+      containers:
+        - name: nsq-monitor
+          image: "{{ .Values.nsqMonitor.image.repository }}:{{ .Values.nsqMonitor.image.tag }}"
+          imagePullPolicy: {{ .Values.nsqMonitor.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.nsqMonitor.service.httpPort }}
+          # Using inline envs instead of a ConfigMap since there are only a few
+          env:
+            - name: NSQD_HOST
+              value: "{{ .Values.nsqMonitor.env.NSQD_HOST }}"
+            - name: PORT
+              value: "{{ .Values.nsqMonitor.env.PORT }}"
+            - name: POLL_INTERVAL_SECONDS
+              value: "{{ .Values.nsqMonitor.env.POLL_INTERVAL_SECONDS }}"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5

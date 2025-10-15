@@ -9,5 +9,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/worker ./cmd/worker
 # Run
 FROM gcr.io/distroless/static:nonroot
 COPY --from=build /out/worker /worker
+LABEL org.opencontainers.image.source="https://github.com/austindbirch/harbor_hook"
 USER nonroot:nonroot
 ENTRYPOINT ["/worker"]

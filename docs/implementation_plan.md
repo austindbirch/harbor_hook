@@ -120,9 +120,7 @@
 - What we add:
     - Helm charts for Envoy, Ingest, Worker, Postgres, NSQ, Grafana stack
     - K8s manifests: liveness/readiness, resources, PodDisruptionBudgets, HPAs
-    - cert-manager for mTLS certs (cluster-issuer)
-    - Github actions pipeline: build, test, image push, kind cluster, `helm upgrade --install`, run e2e tests (publish N events, receiver flaky, assert metrics/DB/trace)
-    - Image scanning (Trivy) and basic policy checks
+    - Github actions pipeline: build, test, image push, kind cluster, `helm upgrade --install`, run e2e tests
 - Demo:
     - `make kind-up && make helm-install` (or a script) --> cluster healthy
     - Run e2e, show success, port-forward nsqadmin and Grafana, browse dashboards

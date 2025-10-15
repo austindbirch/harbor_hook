@@ -1,7 +1,22 @@
 # HarborHook
 A Go-first, multi-tenant, reliable webhook delivery platform that showcases platform engineering, systems design, SRE practice, and modern observability practices. 
 
-## Quickstart
+## Quickstart (Kubernetes)
+
+This project uses KinD for local dev.
+
+```bash
+# Bring up the entire stack in a local KinD cluster
+make kind-up-and-test
+
+# When you're done, tear down the cluster
+make kind-down
+```
+
+## Docker Compose (Legacy)
+
+The original Docker Compose setup is still available for reference.
+
 ```bash
 # Generate protos (requires protoc-gen-go, -grpc, -grpc-gateway, -openapi)
 make proto
@@ -18,11 +33,16 @@ make clean
 ```
 
 ## TODO
-- [ ] Should this be implemented as a SaaS product, where we have a UI and API access deployed? Or should this live as a bundled package that a dev could theoretically download and use as a pre-baked webhook service?
-- [ ] I'm using docker desktop right now, but other work projects use Rancher. Can I swap docker desktop for rancher?
 - [ ] Regardless of whether this is SaaS or a dev package, I need to add a way for users/devs to generate, store, and inject secrets (for event signing)
 
 ## Smoke checks
+
+After running `make kind-up-and-test`, you can access the services via `kubectl port-forward`:
+```bash
+kubectl port-forward svc/harborhook-nsq-nsqadmin 4171:4171
+```
+
+## Legacy Checks
 ```bash
 curl -s localhost:8080/healthz | jq .
 curl -s localhost:8082/healthz | jq .

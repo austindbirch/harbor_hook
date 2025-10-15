@@ -105,7 +105,7 @@ config:
 ingest:
   replicaCount: 1
   image:
-    repository: harborhook/ingest
+    repository: ghcr.io/austindbirch/harbor_hook/ingest
     pullPolicy: IfNotPresent
     tag: "latest"
   service:
@@ -118,44 +118,44 @@ ingest:
 worker:
   replicaCount: 3
   image:
-    repository: harborhook/worker
+    repository: ghcr.io/austindbirch/harbor_hook/worker
     pullPolicy: IfNotPresent
     tag: "latest"
   service:
     httpPort: 8083 # Internal port for metrics/health
   certsSecretName: harborhook-certs
   # Worker specific settings
-  maxAttempts: "5"
+  maxAttempts: 5
   backoffSchedule: "1s,5s,10s,30s,1m"
-  backoffJitterPct: "0.1"
-  concurrency: "100"
+  backoffJitterPct: 0.1
+  concurrency: 100
   httpClientTimeout: "30s"
 
 # JWKS Server configuration
 jwksServer:
   replicaCount: 1
   image:
-    repository: harborhook/jwks-server
+    repository: ghcr.io/austindbirch/harbor_hook/jwks-server
     pullPolicy: IfNotPresent
     tag: "latest"
   service:
-    port: 8082
+    httpPort: 8082
 
 # Fake Receiver configuration
 fakeReceiver:
   replicaCount: 1
   image:
-    repository: harborhook/fake-receiver
+    repository: ghcr.io/austindbirch/harbor_hook/fake-receiver
     pullPolicy: IfNotPresent
     tag: "latest"
   service:
-    port: 8081
+    httpPort: 8081
   # -- Configuration for the fake receiver's behavior
   config:
-    failFirstN: "0"
+    failFirstN: 0
     endpointSecret: "test-secret"
-    signingLeewaySeconds: "300"
-    responseDelayMs: "0"
+    signingLeewaySeconds: 300
+    responseDelayMs: 0
 
 # Configuration for the postgresql subchart
 postgresql:
@@ -193,5 +193,23 @@ envoy:
     tag: "v1.23.1" # Use a specific, stable version
   service:
     type: LoadBalancer
-    port: 8443
+    httpPort: 8443
   certsSecretName: harborhook-certs
+
+# Nsq-monitor configuration
+nsqMonitor:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/austindbirch/harbor_hook/nsq-monitor
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    httpPort: 8084
+  env:
+    NSQD_HOST: "nsqd:4151"
+    PORT: 8084
+    POLL_INTERVAL_SECONDS: 15
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: 8084
+    prometheus.io/path: "/metrics"
