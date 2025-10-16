@@ -19,11 +19,28 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
       - name: Set up buf
         uses: bufbuild/buf-setup-action@v1
         with:
           version: latest
           github_token: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: Set up proto tools
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Generate protobufs
         run: make proto
