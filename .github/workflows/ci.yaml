@@ -89,7 +89,7 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Build and push jwks-server image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v4 
         with:
           context: .
           file: ./cmd/jwks-server/Dockerfile
