@@ -12,6 +12,6 @@ dependencies:
   repository: "https://charts.bitnami.com/bitnami"
   alias: postgres # To match our service name convention
 - name: nsq
-  version: "0.0.11" # Using a known stable version
+  version: "0.0.10" # Using a known stable version
   repository: "https://nsqio.github.io/helm-chart"
   alias: nsq # To match our service name convention
