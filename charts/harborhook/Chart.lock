@@ -4,6 +4,6 @@ dependencies:
   version: 14.0.0
 - name: nsq
   repository: https://nsqio.github.io/helm-chart
-  version: 0.0.10
-digest: sha256:4d0fb3f3cf75ab63a871a2dee802676d5f2a79054a53e31bc163a1b2def9fa88
-generated: "2025-10-17T12:33:49.845479-06:00"
+  version: 0.0.11
+digest: sha256:4522ea5740bf120e9a43de0e2aad661d8c38c4f687d89d75caff0a876880a941
+generated: "2025-10-18T22:02:17.998435-06:00"

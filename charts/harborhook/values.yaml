@@ -174,15 +174,18 @@ postgresql:
 # Configuration for the nsq subchart
 nsq:
   nsqd:
-    fullnameOverride: "{{ .Release.Name }}-nsqd"
+    enabled: true
+    replicaCount: 1
     persistence:
       enabled: false
   nsqlookupd:
-    fullnameOverride: "{{ .Release.Name }}-nsqlookupd"
+    enabled: true
+    replicaCount: 1
     persistence:
       enabled: false
   nsqadmin:
-    fullnameOverride: "{{ .Release.Name }}-nsqadmin"
+    enabled: true
+    replicaCount: 1
 
 # Envoy gateway configuration
 envoy:
