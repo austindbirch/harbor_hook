@@ -17,7 +17,6 @@ spec:
         {{- include "harborhook.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: envoy
     spec:
-      serviceAccountName: {{ include "harborhook.serviceAccountName" . }}
       containers:
         - name: envoy
           image: "{{ .Values.envoy.image.repository }}:{{ .Values.envoy.image.tag | default .Chart.AppVersion }}"
