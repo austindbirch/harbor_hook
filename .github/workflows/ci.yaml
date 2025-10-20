@@ -137,7 +137,7 @@ jobs:
           for IMAGE in "${IMAGES[@]}"; do
             echo "Pulling and loading image: ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }}"
             docker pull ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }}
-            kind load docker-image ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }}
+            kind load docker-image ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }} --name chart-testing
           done
 
       - name: Set up Helm
