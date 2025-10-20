@@ -8,7 +8,7 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: {{ .Values.jwksServer.service.port }}
+    - port: {{ .Values.jwksServer.service.httpPort }}
       targetPort: http
       protocol: TCP
       name: http

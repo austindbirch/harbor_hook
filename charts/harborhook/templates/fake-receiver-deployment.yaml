@@ -24,7 +24,7 @@ spec:
           imagePullPolicy: {{ .Values.fakeReceiver.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.fakeReceiver.service.port }}
+              containerPort: {{ .Values.fakeReceiver.service.httpPort }}
               protocol: TCP
           envFrom:
             - configMapRef:

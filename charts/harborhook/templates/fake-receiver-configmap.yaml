@@ -6,7 +6,7 @@ metadata:
     {{- include "harborhook.labels" . | nindent 4 }}
     app.kubernetes.io/component: fake-receiver
 data:
-  FAKE_RECEIVER_PORT: {{ .Values.fakeReceiver.service.port | quote }}
+  FAKE_RECEIVER_PORT: {{ .Values.fakeReceiver.service.httpPort | quote }}
   FAIL_FIRST_N: {{ .Values.fakeReceiver.config.failFirstN | quote }}
   ENDPOINT_SECRET: {{ .Values.fakeReceiver.config.endpointSecret | quote }}
   SIGNING_LEEWAY_SECONDS: {{ .Values.fakeReceiver.config.signingLeewaySeconds | quote }}

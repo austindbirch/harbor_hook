@@ -24,11 +24,11 @@ spec:
           imagePullPolicy: {{ .Values.jwksServer.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.jwksServer.service.port }}
+              containerPort: {{ .Values.jwksServer.service.httpPort }}
               protocol: TCP
           env:
             - name: PORT
-              value: {{ .Values.jwksServer.service.port | quote }}
+              value: {{ .Values.jwksServer.service.httpPort | quote }}
           livenessProbe:
             httpGet:
               path: /healthz

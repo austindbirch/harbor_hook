@@ -8,7 +8,7 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: {{ .Values.fakeReceiver.service.port }}
+    - port: {{ .Values.fakeReceiver.service.httpPort }}
       targetPort: http
       protocol: TCP
       name: http

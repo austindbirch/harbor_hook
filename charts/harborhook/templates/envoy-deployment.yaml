@@ -24,7 +24,7 @@ spec:
           imagePullPolicy: {{ .Values.envoy.image.pullPolicy }}
           ports:
             - name: https
-              containerPort: {{ .Values.envoy.service.port }}
+              containerPort: {{ .Values.envoy.service.httpPort }}
               protocol: TCP
             - name: admin
               containerPort: 9901

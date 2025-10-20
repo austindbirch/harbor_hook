@@ -13,7 +13,7 @@ data:
         address:
           socket_address:
             address: 0.0.0.0
-            port_value: {{ .Values.envoy.service.port }}
+            port_value: {{ .Values.envoy.service.httpPort }}
         listener_filters:
         - name: envoy.filters.listener.tls_inspector
           typed_config:
@@ -81,7 +81,7 @@ data:
                       - "harborhook-api"
                       remote_jwks:
                         http_uri:
-                          uri: "http://{{ include "harborhook.fullname" . }}-jwks-server:{{ .Values.jwksServer.service.port }}/.well-known/jwks.json"
+                          uri: "http://{{ include "harborhook.fullname" . }}-jwks-server:{{ .Values.jwksServer.service.httpPort }}/.well-known/jwks.json"
                           cluster: jwks_cluster
                           timeout: 5s
                         cache_duration: 300s
@@ -158,7 +158,7 @@ data:
                 address:
                   socket_address:
                     address: {{ include "harborhook.fullname" . }}-jwks-server
-                    port_value: {{ .Values.jwksServer.service.port }}
+                    port_value: {{ .Values.jwksServer.service.httpPort }}
     admin:
       address:
         socket_address:
