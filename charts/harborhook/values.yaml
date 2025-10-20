@@ -163,8 +163,8 @@ postgresql:
   fullnameOverride: "{{ .Release.Name }}-postgres"
   image:
     registry: docker.io
-    repository: library/postgres
-    tag: "16-alpine"
+    repository: bitnami/postgresql
+    tag: "latest"
   auth:
     database: "{{ .Values.config.db.name }}"
     username: "{{ .Values.config.db.user }}"
