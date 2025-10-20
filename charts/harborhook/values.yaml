@@ -85,7 +85,7 @@ affinity: {}
 config:
   db:
     user: "postgres"
-    host: "harborhook-postgres" # This will be the service name of the postgres chart
+    host: "postgres" # This will be the service name of the postgres chart
     port: "5432"
     name: "harborhook"
     # The password will be handled via secrets
@@ -96,8 +96,8 @@ config:
     dlqTopic: "dlq"
     workerChannel: "workers"
   webhook:
-    signatureHeader: "Harborhook-Signature"
-    timestampHeader: "Harborhook-Timestamp"
+    signatureHeader: "X-Harborhook-Signature"
+    timestampHeader: "X-Harborhook-Timestamp"
   otel:
     endpoint: "http://harborhook-tempo:4318"
 
@@ -112,7 +112,7 @@ ingest:
     httpPort: 8080
     grpcPort: 50051
   # The name of the secret containing the TLS certificates
-  certsSecretName: harborhook-certs
+  certsSecretName: test-harborhook-certs
 
 # Worker service configuration
 worker:
@@ -123,7 +123,7 @@ worker:
     tag: "latest"
   service:
     httpPort: 8083 # Internal port for metrics/health
-  certsSecretName: harborhook-certs
+  certsSecretName: test-harborhook-certs
   # Worker specific settings
   maxAttempts: 5
   backoffSchedule: "1s,5s,10s,30s,1m"
@@ -153,23 +153,23 @@ fakeReceiver:
   # -- Configuration for the fake receiver's behavior
   config:
     failFirstN: 0
-    endpointSecret: "test-secret"
+    endpointSecret: "demo_secret"
     signingLeewaySeconds: 300
     responseDelayMs: 0
 
 # Configuration for the postgresql subchart
-postgresql:
+postgres:
   # Use the alias 'postgres' to match our service naming
   fullnameOverride: "{{ .Release.Name }}-postgres"
   image:
     registry: docker.io
-    repository: bitnami/postgresql
-    tag: "latest"
+    repository: library/postgres
+    tag: 16-alpine
   auth:
-    database: "{{ .Values.config.db.name }}"
-    username: "{{ .Values.config.db.user }}"
+    database: "harborhook"
+    username: "postgres"
     # In a production environment, this should be sourced from a secret.
-    password: "supersecretpassword"
+    password: "postgres"
   primary:
     persistence:
       enabled: true
@@ -201,7 +201,7 @@ envoy:
   service:
     type: LoadBalancer
     httpPort: 8443
-  certsSecretName: harborhook-certs
+  certsSecretName: test-harborhook-certs
 
 # Nsq-monitor configuration
 nsqMonitor:
