@@ -161,6 +161,10 @@ fakeReceiver:
 postgresql:
   # Use the alias 'postgres' to match our service naming
   fullnameOverride: "{{ .Release.Name }}-postgres"
+  image:
+    registry: docker.io
+    repository: library/postgres
+    tag: "16-alpine"
   auth:
     database: "{{ .Values.config.db.name }}"
     username: "{{ .Values.config.db.user }}"
