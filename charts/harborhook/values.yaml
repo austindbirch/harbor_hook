@@ -160,7 +160,7 @@ fakeReceiver:
 # Configuration for the postgresql subchart
 postgres:
   # Use the alias 'postgres' to match our service naming
-  fullnameOverride: "{{ .Release.Name }}-postgres"
+  # fullnameOverride: "{{ .Release.Name }}-postgres"
   image:
     registry: docker.io
     repository: library/postgres
