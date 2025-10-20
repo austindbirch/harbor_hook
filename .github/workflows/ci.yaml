@@ -55,7 +55,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -115,16 +115,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up KinD cluster
         uses: helm/kind-action@v1.5.0
 
       - name: Load images into KinD
         run: |
-          kind load docker-image ghcr.io/${{ github.repository }}/ingest:${{ github.sha }}
-          kind load docker-image ghcr.io/${{ github.repository }}/worker:${{ github.sha }}
-          kind load docker-image ghcr.io/${{ github.repository }}/jwks-server:${{ github.sha }}
-          kind load docker-image ghcr.io/${{ github.repository }}/fake-receiver:${{ github.sha }}
-          kind load docker-image ghcr.io/${{ github.repository }}/nsq-monitor:${{ github.sha }}
+          IMAGES=(
+            ingest
+            worker
+            jwks-server
+            fake-receiver
+            nsq-monitor
+          )
+          for IMAGE in "${IMAGES[@]}"; do
+            echo "Pulling and loading image: ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }}"
+            docker pull ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }}
+            kind load docker-image ghcr.io/${{ github.repository }}/$IMAGE:${{ github.sha }}
+          done
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
