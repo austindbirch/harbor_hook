@@ -37,6 +37,20 @@ jobs:
       - name: Generate protobufs
         run: make proto
 
+      - name: Upload protobufs
+        uses: actions/upload-artifact@v4
+        with:
+          name: protogen
+          path: protogen/
+
+      - name: Cache protobufs
+        uses: actions/cache@v3
+        with:
+          path: protogen/
+          key: ${{ runner.os }}-protogen-${{ hashFiles('proto/**/*/.proto') }}
+          restore-keys: |
+            ${{ runner.os }}-protogen-
+
       - name: Build
         run: make build
 
@@ -61,6 +75,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download protobufs
+        uses: actions/download-artifact@v4
+        with:
+          name: protogen
+          path: protogen/
 
       - name: Build and push ingest image
         uses: docker/build-push-action@v6
@@ -184,6 +204,16 @@ jobs:
           kubectl describe pods -A | tail -n 100
           echo "--- EVENTS ---"
           kubectl get events -A --sort-by='.metadata.creationTimestamp'| tail -n 30
+
+      - name: Dump logs
+        if: always()
+        run: |
+          echo "--- LOGS ---"
+          for pod in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep harborhook); do
+            echo "Logs for pod: $pod"
+            kubectl logs $pod --previous || true
+            echo ""
+          done
 
       - name: Run e2e test script
         run: |
