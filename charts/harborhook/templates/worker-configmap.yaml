@@ -26,8 +26,8 @@ data:
   JWT_ISSUER: "harborhook"
   JWT_AUDIENCE: "harborhook-api"
   ENABLE_TLS: "false"
-  NSQD_TCP_ADDR: {{ .Values.config.nsq.nsqdTcpAddr | quote }}
-  NSQ_LOOKUP_HTTP_ADDR: {{ .Values.config.nsq.nsqLookupHttpAddr | quote }}
+  NSQD_TCP_ADDR: {{ .Release.Name }}-nsqd:4150
+  NSQ_LOOKUP_HTTP_ADDR: {{ .Release.Name }}-nsqlookupd:4161
   NSQ_DELIVERIES_TOPIC: {{ .Values.config.nsq.deliveriesTopic | quote }}
   NSQ_DLQ_TOPIC: {{ .Values.config.nsq.dlqTopic | quote }}
   NSQ_WORKER_CHANNEL: {{ .Values.config.nsq.workerChannel | quote }}
