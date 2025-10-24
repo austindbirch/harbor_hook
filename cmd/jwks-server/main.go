@@ -150,7 +150,7 @@ func main() {
 	// Register handlers (jwks, token, health)
 	http.HandleFunc("/.well-known/jwks.json", jwksHandler)
 	http.HandleFunc("/token", createTokenHandler)
-	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/healthz", healthHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
