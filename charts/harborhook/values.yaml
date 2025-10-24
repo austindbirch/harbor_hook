@@ -149,7 +149,7 @@ fakeReceiver:
     pullPolicy: IfNotPresent
     tag: "latest"
   service:
-    httpPort: ":8081"
+    httpPort: 8081
   # -- Configuration for the fake receiver's behavior
   config:
     failFirstN: 0
