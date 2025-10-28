@@ -85,7 +85,8 @@ affinity: {}
 config:
   db:
     user: "postgres"
-    host: "test-postgres" # This will be the service name of the postgres chart
+    pass: "postgres" # In production, we should use a secret
+    host: "postgres" # This will be the service name of the postgres chart
     port: "5432"
     name: "harborhook"
     # The password will be handled via secrets
