@@ -23,13 +23,17 @@ var (
 
 func main() {
 	cfg := config.FromEnv()
+	listenPort := cfg.FakeReceiver.Port
+	if !strings.HasPrefix(listenPort, ":") {
+		listenPort = ":" + listenPort
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"ok":true}`)) })
 	mux.HandleFunc("/hook", handleHookFactory(cfg))
 
 	server := &http.Server{
-		Addr:         cfg.FakeReceiver.Port,
+		Addr:         listenPort,
 		Handler:      mux,
 		ReadTimeout:  cfg.FakeReceiver.ReadTimeout,
 		WriteTimeout: cfg.FakeReceiver.WriteTimeout,

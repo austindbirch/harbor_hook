@@ -193,15 +193,13 @@ jobs:
             --set nsqMonitor.image.tag=${{ github.sha }}
 
       - name: Wait for deployments to be ready
-        run: kubectl wait --for=condition=Available --timeout=5m deployment --all
+        run: kubectl wait --for=condition=Available --timeout=2m deployment --all
 
       - name: Describe all pods
         if: always()
         run: |
           echo "--- PODS ---"
           kubectl get pods -A
-          echo "--- DESCRIBE ---"
-          kubectl describe pods -A | tail -n 100
           echo "--- EVENTS ---"
           kubectl get events -A --sort-by='.metadata.creationTimestamp'| tail -n 30
 
