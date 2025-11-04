@@ -175,6 +175,146 @@ postgres:
     persistence:
       enabled: true
       size: 1Gi
+    initdb:
+      # Database initialization scripts - executed in alphabetical order
+      scripts:
+        01_init.sql: |
+          CREATE SCHEMA IF NOT EXISTS harborhook;
+          CREATE TABLE IF NOT EXISTS harborhook.tenants (
+              id   TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
+          INSERT INTO harborhook.tenants (id, name) VALUES ('tn_demo', 'Demo Tenant')
+          ON CONFLICT DO NOTHING;
+        02_create_schema_phase1.sql: |
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE TABLE IF NOT EXISTS harborhook.endpoints (
+              id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id    TEXT NOT NULL,
+              url          TEXT NOT NULL,
+              secret       TEXT,
+              headers      JSONB NOT NULL DEFAULT '{}'::jsonb,
+              rate_per_sec INT NOT NULL DEFAULT 0,
+              created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
+          CREATE TABLE IF NOT EXISTS harborhook.subscriptions (
+              id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id    TEXT NOT NULL,
+              event_type   TEXT NOT NULL,
+              endpoint_id  UUID NOT NULL REFERENCES harborhook.endpoints(id) ON DELETE CASCADE,
+              created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
+          CREATE TABLE IF NOT EXISTS harborhook.events (
+              id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id     TEXT NOT NULL,
+              event_type    TEXT NOT NULL,
+              payload       JSONB NOT NULL,
+              occurred_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+              created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
+          DO $$
+          BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'delivery_status') THEN
+                  CREATE TYPE delivery_status AS ENUM ('pending', 'ok', 'failed');
+              END IF;
+          END$$;
+          CREATE TABLE IF NOT EXISTS harborhook.deliveries (
+              id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              event_id    UUID NOT NULL REFERENCES harborhook.events(id) ON DELETE CASCADE,
+              endpoint_id UUID NOT NULL REFERENCES harborhook.endpoints(id) ON DELETE CASCADE,
+              status      delivery_status NOT NULL DEFAULT 'pending',
+              attempt     INT NOT NULL DEFAULT 0,
+              http_status INT,
+              latency_ms  INT,
+              last_error  TEXT,
+              next_try_at TIMESTAMPTZ,
+              created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
+          CREATE INDEX IF NOT EXISTS idx_subs_tenant_event ON harborhook.subscriptions(tenant_id, event_type);
+          CREATE INDEX IF NOT EXISTS idx_events_tenant_created ON harborhook.events(tenant_id, created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_deliveries_endpoint_status ON harborhook.deliveries(endpoint_id, status);
+        03_phase2.sql: |
+          ALTER TYPE delivery_status ADD VALUE IF NOT EXISTS 'queued';
+          ALTER TYPE delivery_status ADD VALUE IF NOT EXISTS 'inflight';
+          ALTER TYPE delivery_status ADD VALUE IF NOT EXISTS 'delivered';
+          ALTER TYPE delivery_status ADD VALUE IF NOT EXISTS 'dead';
+          UPDATE harborhook.deliveries SET status = 'queued' WHERE status = 'pending';
+          UPDATE harborhook.deliveries SET status = 'delivered' WHERE status = 'ok';
+          ALTER TABLE harborhook.deliveries ALTER COLUMN status SET DEFAULT 'queued';
+          ALTER TABLE harborhook.events ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+          DO $$
+          BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_events_tenant_idem') THEN
+                  ALTER TABLE harborhook.events ADD CONSTRAINT uq_events_tenant_idem UNIQUE (tenant_id, idempotency_key);
+              END IF;
+          END$$;
+          CREATE TABLE IF NOT EXISTS harborhook.dlq (
+            id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            delivery_id  UUID NOT NULL REFERENCES harborhook.deliveries(id) ON DELETE CASCADE,
+            reason       TEXT NOT NULL,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+          );
+        04_phase3.sql: |
+          BEGIN;
+          ALTER TABLE harborhook.deliveries ADD COLUMN IF NOT EXISTS replay_of UUID REFERENCES harborhook.deliveries(id) ON DELETE SET NULL;
+          ALTER TABLE harborhook.deliveries ADD COLUMN IF NOT EXISTS replay_reason TEXT NULL;
+          ALTER TABLE harborhook.deliveries
+              ADD COLUMN IF NOT EXISTS enqueued_at   TIMESTAMPTZ DEFAULT now(),
+              ADD COLUMN IF NOT EXISTS dequeued_at   TIMESTAMPTZ,
+              ADD COLUMN IF NOT EXISTS sent_at       TIMESTAMPTZ,
+              ADD COLUMN IF NOT EXISTS delivered_at  TIMESTAMPTZ,
+              ADD COLUMN IF NOT EXISTS failed_at     TIMESTAMPTZ,
+              ADD COLUMN IF NOT EXISTS dlq_at        TIMESTAMPTZ,
+              ADD COLUMN IF NOT EXISTS error_reason  TEXT;
+          CREATE INDEX IF NOT EXISTS idx_deliveries_event_id ON harborhook.deliveries(event_id);
+          CREATE INDEX IF NOT EXISTS idx_deliveries_endpoint_time ON harborhook.deliveries(endpoint_id, enqueued_at);
+          CREATE INDEX IF NOT EXISTS idx_deliveries_replay_of ON harborhook.deliveries(replay_of);
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_single_pending_replay ON harborhook.deliveries(replay_of) WHERE status IN ('queued', 'inflight');
+          CREATE OR REPLACE FUNCTION update_delivery_timestamps() RETURNS TRIGGER AS $$
+          BEGIN
+              CASE NEW.status
+                  WHEN 'queued' THEN
+                      IF OLD.status IS DISTINCT FROM NEW.status AND NEW.enqueued_at IS NULL THEN
+                          NEW.enqueued_at = now();
+                      END IF;
+                  WHEN 'inflight' THEN
+                      IF OLD.status IS DISTINCT FROM NEW.status THEN
+                          NEW.dequeued_at = now();
+                      END IF;
+                  WHEN 'delivered' THEN
+                      IF OLD.status IS DISTINCT FROM NEW.status THEN
+                          NEW.delivered_at = now();
+                      END IF;
+                  WHEN 'failed' THEN
+                      IF OLD.status IS DISTINCT FROM NEW.status THEN
+                          NEW.failed_at = now();
+                      END IF;
+                  WHEN 'dead' THEN
+                      IF OLD.status IS DISTINCT FROM NEW.status THEN
+                          NEW.dlq_at = now();
+                      END IF;
+              END CASE;
+              NEW.updated_at = now();
+              RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+          DROP TRIGGER IF EXISTS delivery_timestamps_trigger ON harborhook.deliveries;
+          CREATE TRIGGER delivery_timestamps_trigger BEFORE UPDATE ON harborhook.deliveries FOR EACH ROW EXECUTE FUNCTION update_delivery_timestamps();
+          CREATE OR REPLACE FUNCTION set_initial_timestamps() RETURNS TRIGGER AS $$
+          BEGIN
+              IF NEW.status = 'queued' AND NEW.enqueued_at IS NULL THEN
+                  NEW.enqueued_at = now();
+              END IF;
+              NEW.created_at = COALESCE(NEW.created_at, now());
+              NEW.updated_at = now();
+              RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+          DROP TRIGGER IF EXISTS delivery_insert_timestamps_trigger ON harborhook.deliveries;
+          CREATE TRIGGER delivery_insert_timestamps_trigger BEFORE INSERT ON harborhook.deliveries FOR EACH ROW EXECUTE FUNCTION set_initial_timestamps();
+          COMMIT;
 
 # Configuration for the nsq subchart
 nsq:

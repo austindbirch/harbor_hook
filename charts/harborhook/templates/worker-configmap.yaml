@@ -17,6 +17,7 @@ data:
   WORKER_CONCURRENCY: {{ .Values.worker.concurrency | quote }}
   HTTP_CLIENT_TIMEOUT: {{ .Values.worker.httpClientTimeout | quote }}
   DB_USER: {{ .Values.config.db.user | quote }}
+  DB_PASS: {{ .Values.config.db.pass | quote }}
   DB_HOST: {{ printf "%s-postgres" .Release.Name | quote }}
   DB_PORT: {{ .Values.config.db.port | quote }}
   DB_NAME: {{ .Values.config.db.name | quote }}
@@ -34,4 +35,3 @@ data:
   WEBHOOK_SIGNATURE_HEADER: {{ .Values.config.webhook.signatureHeader | quote }}
   WEBHOOK_TIMESTAMP_HEADER: {{ .Values.config.webhook.timestampHeader | quote }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
-  # DB_PASS will be sourced from a secret
