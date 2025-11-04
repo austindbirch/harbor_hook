@@ -162,10 +162,7 @@ fakeReceiver:
 postgres:
   # Use the alias 'postgres' to match our service naming
   # fullnameOverride: "{{ .Release.Name }}-postgres"
-  image:
-    registry: docker.io
-    repository: bitnami/postgresql
-    tag: 16.1.0
+  # Using chart's default image (bitnami/postgresql with appropriate tag)
   auth:
     database: "harborhook"
     username: "postgres"
