@@ -12,7 +12,7 @@ data:
   GRPC_PORT: ":{{ .Values.ingest.service.grpcPort }}"
   DB_USER: {{ .Values.config.db.user | quote }}
   DB_PASS: {{ .Values.config.db.pass | quote }}
-  DB_HOST: {{ .Values.config.db.host | quote }}
+  DB_HOST: {{ printf "%s-postgres" .Release.Name | quote }}
   DB_PORT: {{ .Values.config.db.port | quote }}
   DB_NAME: {{ .Values.config.db.name | quote }}
   DB_CONN_MAX_LIFETIME: "1h"
