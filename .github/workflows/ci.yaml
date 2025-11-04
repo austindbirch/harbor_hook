@@ -226,10 +226,6 @@ jobs:
           echo "Postgres current logs:"
           kubectl logs -l app.kubernetes.io/name=postgres --tail=100 || true
           echo ""
-          echo "Postgres init ConfigMap:"
-          kubectl get configmap -l app.kubernetes.io/name=postgres
-          kubectl describe configmap test-postgres-init-scripts || true
-          echo ""
           echo "Postgres secret:"
           kubectl get secret test-postgres || echo "Secret not found"
 

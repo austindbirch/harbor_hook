@@ -1,9 +1,9 @@
 dependencies:
 - name: postgresql
   repository: https://charts.bitnami.com/bitnami
-  version: 14.0.0
+  version: 15.5.32
 - name: nsq
   repository: https://nsqio.github.io/helm-chart
   version: 0.0.11
-digest: sha256:4522ea5740bf120e9a43de0e2aad661d8c38c4f687d89d75caff0a876880a941
-generated: "2025-10-18T22:02:17.998435-06:00"
+digest: sha256:c65e901af4cb920b69c0d18c0940ea837776248dd68b1e11030483403760c852
+generated: "2025-11-04T13:49:44.489448-07:00"
