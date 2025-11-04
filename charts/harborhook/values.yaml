@@ -164,8 +164,8 @@ postgres:
   # fullnameOverride: "{{ .Release.Name }}-postgres"
   image:
     registry: docker.io
-    repository: library/postgres
-    tag: 16-alpine
+    repository: bitnami/postgresql
+    tag: 16.1.0
   auth:
     database: "harborhook"
     username: "postgres"

@@ -213,6 +213,42 @@ jobs:
             echo ""
           done
 
+      - name: Debug PostgreSQL
+        if: always()
+        run: |
+          echo "--- POSTGRESQL DEBUG ---"
+          echo "StatefulSet status:"
+          kubectl get statefulset -l app.kubernetes.io/name=postgres
+          echo ""
+          echo "Postgres pod details:"
+          kubectl describe pod -l app.kubernetes.io/name=postgres
+          echo ""
+          echo "Postgres current logs:"
+          kubectl logs -l app.kubernetes.io/name=postgres --tail=100 || true
+          echo ""
+          echo "Postgres init ConfigMap:"
+          kubectl get configmap -l app.kubernetes.io/name=postgres
+          kubectl describe configmap test-postgres-init-scripts || true
+          echo ""
+          echo "Postgres secret:"
+          kubectl get secret test-postgres || echo "Secret not found"
+
+      - name: Debug Ingest
+        if: always()
+        run: |
+          echo "--- INGEST DEBUG ---"
+          echo "Ingest deployment status:"
+          kubectl get deployment -l app.kubernetes.io/component=ingest
+          echo ""
+          echo "Ingest pod details:"
+          kubectl describe pod -l app.kubernetes.io/component=ingest
+          echo ""
+          echo "Ingest current logs:"
+          kubectl logs -l app.kubernetes.io/component=ingest --tail=50 || true
+          echo ""
+          echo "Ingest ConfigMap:"
+          kubectl get configmap test-harborhook-ingest-config -o yaml
+
       - name: Run e2e test script
         run: |
           echo "Running e2e tests..."
