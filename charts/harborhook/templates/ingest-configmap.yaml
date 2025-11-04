@@ -21,12 +21,11 @@ data:
   JWT_ISSUER: "harborhook"
   JWT_AUDIENCE: "harborhook-api"
   ENABLE_TLS: "false"
-  NSQD_TCP_ADDR: {{ .Values.config.nsq.nsqdTcpAddr | quote }}
-  NSQ_LOOKUP_HTTP_ADDR: {{ .Values.config.nsq.nsqLookupHttpAddr | quote }}
+  NSQD_TCP_ADDR: {{ printf "%s-nsqd:4150" .Release.Name }}
+  NSQ_LOOKUP_HTTP_ADDR: {{ printf "%s-nsqlookupd:4161" .Release.Name }}
   NSQ_DELIVERIES_TOPIC: {{ .Values.config.nsq.deliveriesTopic | quote }}
   NSQ_DLQ_TOPIC: {{ .Values.config.nsq.dlqTopic | quote }}
   NSQ_WORKER_CHANNEL: {{ .Values.config.nsq.workerChannel | quote }}
   WEBHOOK_SIGNATURE_HEADER: {{ .Values.config.webhook.signatureHeader | quote }}
   WEBHOOK_TIMESTAMP_HEADER: {{ .Values.config.webhook.timestampHeader | quote }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
-  # DB_PASS will be sourced from a secret

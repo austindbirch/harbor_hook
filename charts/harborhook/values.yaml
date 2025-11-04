@@ -173,7 +173,7 @@ postgres:
     password: "postgres"
   primary:
     persistence:
-      enabled: true
+      enabled: false
       size: 1Gi
     initdb:
       # Database initialization scripts - executed in alphabetical order
