@@ -295,8 +295,8 @@ test_e2e_workflow() {
         -H "Content-Type: application/json" \
         -d "{\"tenant_id\":\"$TENANT_ID\",\"event_type\":\"$EVENT_TYPE\",\"payload\":{\"test\":\"ci_e2e\",\"timestamp\":\"$timestamp\"},\"idempotency_key\":\"ci-test-$(date +%s)\"}" 2>/dev/null || echo '{}')
 
-    local event_id=$(echo "$event_response" | jq -r '.event_id' 2>/dev/null || echo "null")
-    local fanout_count=$(echo "$event_response" | jq -r '.fanout_count' 2>/dev/null || echo "0")
+    local event_id=$(echo "$event_response" | jq -r '.eventId' 2>/dev/null || echo "null")
+    local fanout_count=$(echo "$event_response" | jq -r '.fanoutCount' 2>/dev/null || echo "0")
 
     if [ "$event_id" != "null" ] && [ -n "$event_id" ]; then
         print_pass "Event published successfully: $event_id (fanout: $fanout_count)"
