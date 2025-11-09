@@ -163,8 +163,8 @@ postgres:
   # Use the alias 'postgres' to match our service naming
   # fullnameOverride: "{{ .Release.Name }}-postgres"
   image:
-    # Use the major version tag which always resolves to latest patch
-    tag: "16"
+    # Use latest tag for the hardened Bitnami PostgreSQL image
+    tag: "latest"
   auth:
     database: "harborhook"
     username: "postgres"
