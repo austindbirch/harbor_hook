@@ -193,7 +193,7 @@ jobs:
 
       - name: Verify PostgreSQL is accessible
         run: |
-          kubectl exec test-postgres-0 -- psql -U postgres -d harborhook -c "SELECT 1;" || {
+          kubectl exec test-postgres-0 -- env PGPASSWORD=postgres psql -U postgres -d harborhook -c "SELECT 1;" || {
             echo "PostgreSQL not ready, checking logs..."
             kubectl logs test-postgres-0 --tail=50
             exit 1

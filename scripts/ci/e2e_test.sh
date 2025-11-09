@@ -158,7 +158,7 @@ test_database() {
     print_header "💾 Database Tests"
 
     print_test "Checking PostgreSQL connectivity"
-    local pg_output=$(kubectl exec ${POSTGRES_SERVICE}-0 -- psql -U postgres -d harborhook -c "SELECT 1;" 2>/dev/null)
+    local pg_output=$(kubectl exec ${POSTGRES_SERVICE}-0 -- env PGPASSWORD=postgres psql -U postgres -d harborhook -c "SELECT 1;" 2>/dev/null)
     local pg_ready=$(echo "$pg_output" | grep "1 row" | wc -l | tr -d '[:space:]')
 
     if [ "$pg_ready" -gt 0 ] 2>/dev/null; then
@@ -169,7 +169,7 @@ test_database() {
     fi
 
     print_test "Checking demo tenant exists in database"
-    local tenant_output=$(kubectl exec ${POSTGRES_SERVICE}-0 -- psql -U postgres -d harborhook -c "SELECT id FROM harborhook.tenants WHERE id='$TENANT_ID';" 2>/dev/null)
+    local tenant_output=$(kubectl exec ${POSTGRES_SERVICE}-0 -- env PGPASSWORD=postgres psql -U postgres -d harborhook -c "SELECT id FROM harborhook.tenants WHERE id='$TENANT_ID';" 2>/dev/null)
     local tenant_exists=$(echo "$tenant_output" | grep "$TENANT_ID" | wc -l | tr -d '[:space:]')
 
     if [ "$tenant_exists" -gt 0 ] 2>/dev/null; then
