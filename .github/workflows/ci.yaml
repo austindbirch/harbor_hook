@@ -25,8 +25,18 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           setup_only: true
+
+      - name: Cache proto tools
+        id: cache-proto-tools
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: ${{ runner.os }}-proto-tools-${{ hashFiles('**/go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-proto-tools-
         
       - name: Set up proto tools
+        if: steps.cache-proto-tools.outputs.cache-hit != 'true'
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
@@ -58,16 +68,28 @@ jobs:
         run: go test ./...
 
   build-and-push-images:
-    name: Build and Push Images
+    name: Build and Push ${{ matrix.service }}
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        service: [ingest, worker, jwks-server, fake-receiver, nsq-monitor]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download protobufs
+        uses: actions/download-artifact@v4
+        with:
+          name: protogen
+          path: protogen/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -76,56 +98,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download protobufs
-        uses: actions/download-artifact@v4
-        with:
-          name: protogen
-          path: protogen/
-
-      - name: Build and push ingest image
+      - name: Build and push ${{ matrix.service }} image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./cmd/ingest/Dockerfile
+          file: ./cmd/${{ matrix.service }}/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/ingest:${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
-
-      - name: Build and push worker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./cmd/worker/Dockerfile
-          push: true 
-          tags: ghcr.io/${{ github.repository }}/worker:${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
-
-      - name: Build and push jwks-server image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./cmd/jwks-server/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/jwks-server:${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
-
-      - name: Build and push fake-receiver image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./cmd/fake-receiver/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/fake-receiver:${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
-
-      - name: Build and push nsq-monitor image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./cmd/nsq-monitor/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/nsq-monitor:${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   e2e-test:
     name: End-to-End Test
@@ -165,6 +147,14 @@ jobs:
         with:
           version: v3.10.0
 
+      - name: Cache Helm charts
+        uses: actions/cache@v4
+        with:
+          path: charts/harborhook/charts
+          key: ${{ runner.os }}-helm-${{ hashFiles('charts/harborhook/Chart.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-helm-
+
       - name: Generate TLS certificates
         run: |
           cd deploy/docker/envoy/certs
@@ -195,57 +185,39 @@ jobs:
       - name: Wait for deployments to be ready
         run: kubectl wait --for=condition=Available --timeout=2m deployment --all
 
-      - name: Describe all pods
-        if: always()
-        run: |
-          echo "--- PODS ---"
-          kubectl get pods -A
-          echo "--- EVENTS ---"
-          kubectl get events -A --sort-by='.metadata.creationTimestamp'| tail -n 30
-
-      - name: Dump logs
-        if: always()
-        run: |
-          echo "--- LOGS ---"
-          for pod in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep harborhook); do
-            echo "Logs for pod: $pod"
-            kubectl logs $pod --previous || true
-            echo ""
-          done
-
-      - name: Debug PostgreSQL
-        if: always()
-        run: |
-          echo "--- POSTGRESQL DEBUG ---"
-          echo "StatefulSet status:"
-          kubectl get statefulset -l app.kubernetes.io/name=postgres
-          echo ""
-          echo "Postgres pod details:"
-          kubectl describe pod -l app.kubernetes.io/name=postgres
-          echo ""
-          echo "Postgres current logs:"
-          kubectl logs -l app.kubernetes.io/name=postgres --tail=100 || true
-          echo ""
-          echo "Postgres secret:"
-          kubectl get secret test-postgres || echo "Secret not found"
-
-      - name: Debug Ingest
-        if: always()
-        run: |
-          echo "--- INGEST DEBUG ---"
-          echo "Ingest deployment status:"
-          kubectl get deployment -l app.kubernetes.io/component=ingest
-          echo ""
-          echo "Ingest pod details:"
-          kubectl describe pod -l app.kubernetes.io/component=ingest
-          echo ""
-          echo "Ingest current logs:"
-          kubectl logs -l app.kubernetes.io/component=ingest --tail=50 || true
-          echo ""
-          echo "Ingest ConfigMap:"
-          kubectl get configmap test-harborhook-ingest-config -o yaml
-
       - name: Run e2e test script
         run: |
           chmod +x ./scripts/ci/e2e_test.sh
           RELEASE_NAME=test ./scripts/ci/e2e_test.sh
+
+      - name: Debug - Describe all pods
+        if: failure()
+        run: |
+          echo "--- PODS ---"
+          kubectl get pods -A
+          echo "--- EVENTS ---"
+          kubectl get events -A --sort-by='.metadata.creationTimestamp'| tail -n 50
+
+      - name: Debug - Dump logs
+        if: failure()
+        run: |
+          echo "--- HH LOGS ---"
+          for pod in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep harborhook); do
+            echo "Logs for pod: $pod"
+            kubectl logs $pod --tail=100 || true
+            echo ""
+          done
+
+      - name: Debug - PostgreSQL
+        if: failure()
+        run: |
+          echo "--- POSTGRESQL DEBUG ---"
+          kubectl get statefulset -l app.kubernetes.io/name=postgres
+          kubectl logs -l app.kubernetes.io/name=postgres --tail=100 || true
+
+      - name: Debug Ingest
+        if: failure()
+        run: |
+          echo "--- INGEST DEBUG ---"
+          kubectl get deployment -l app.kubernetes.io/component=ingest
+          kubectl logs -l app.kubernetes.io/component=ingest --tail=100 || true
