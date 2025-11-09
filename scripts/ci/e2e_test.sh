@@ -18,30 +18,30 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 FAILED_TESTS=()
 
-# Print colored output
+# Print colored output (all output to stderr to not interfere with command substitution)
 print_header() {
-    echo -e "\n${PURPLE}========================================${NC}"
-    echo -e "${PURPLE}$1${NC}"
-    echo -e "${PURPLE}========================================${NC}"
+    echo -e "\n${PURPLE}========================================${NC}" >&2
+    echo -e "${PURPLE}$1${NC}" >&2
+    echo -e "${PURPLE}========================================${NC}" >&2
 }
 
 print_test() {
-    echo -e "${BLUE}🧪 TEST: $1${NC}"
+    echo -e "${BLUE}🧪 TEST: $1${NC}" >&2
 }
 
 print_pass() {
-    echo -e "${GREEN}✅ PASS: $1${NC}"
+    echo -e "${GREEN}✅ PASS: $1${NC}" >&2
     TESTS_PASSED=$((TESTS_PASSED + 1))
 }
 
 print_fail() {
-    echo -e "${RED}❌ FAIL: $1${NC}"
+    echo -e "${RED}❌ FAIL: $1${NC}" >&2
     TESTS_FAILED=$((TESTS_FAILED + 1))
     FAILED_TESTS+=("$1")
 }
 
 print_info() {
-    echo -e "${CYAN}ℹ INFO: $1${NC}"
+    echo -e "${CYAN}ℹ INFO: $1${NC}" >&2
 }
 
 # Configuration
@@ -265,7 +265,7 @@ test_e2e_workflow() {
         print_pass "Endpoint created successfully: $endpoint_id"
     else
         print_fail "Failed to create endpoint"
-        echo "Response: $endpoint_response"
+        echo "Response: $endpoint_response" >&2
         kill $ENVOY_PF_PID $FAKE_PF_PID 2>/dev/null || true
         return 1
     fi
@@ -282,7 +282,7 @@ test_e2e_workflow() {
         print_pass "Subscription created successfully: $subscription_id"
     else
         print_fail "Failed to create subscription"
-        echo "Response: $subscription_response"
+        echo "Response: $subscription_response" >&2
         kill $ENVOY_PF_PID $FAKE_PF_PID 2>/dev/null || true
         return 1
     fi
@@ -302,7 +302,7 @@ test_e2e_workflow() {
         print_pass "Event published successfully: $event_id (fanout: $fanout_count)"
     else
         print_fail "Failed to publish event"
-        echo "Response: $event_response"
+        echo "Response: $event_response" >&2
         kill $ENVOY_PF_PID $FAKE_PF_PID 2>/dev/null || true
         return 1
     fi
@@ -331,7 +331,7 @@ test_e2e_workflow() {
         fi
     else
         print_fail "Failed to get delivery status"
-        echo "Response: $delivery_response"
+        echo "Response: $delivery_response" >&2
     fi
 
     # Test 6: Verify fake-receiver received the webhook
@@ -361,24 +361,24 @@ generate_summary() {
         pass_rate=$(awk "BEGIN {printf \"%.1f\", $TESTS_PASSED * 100 / $total_tests}")
     fi
 
-    echo "Total Tests: $total_tests"
-    echo "Passed: $TESTS_PASSED"
-    echo "Failed: $TESTS_FAILED"
-    echo "Pass Rate: ${pass_rate}%"
+    echo "Total Tests: $total_tests" >&2
+    echo "Passed: $TESTS_PASSED" >&2
+    echo "Failed: $TESTS_FAILED" >&2
+    echo "Pass Rate: ${pass_rate}%" >&2
 
     if [ $TESTS_FAILED -gt 0 ]; then
-        echo -e "\n${RED}Failed Tests:${NC}"
+        echo -e "\n${RED}Failed Tests:${NC}" >&2
         for test in "${FAILED_TESTS[@]}"; do
-            echo "  • $test"
+            echo "  • $test" >&2
         done
     fi
 
-    echo ""
+    echo "" >&2
     if [ $TESTS_FAILED -eq 0 ]; then
-        echo -e "${GREEN}🎉 All tests passed! Harborhook is working correctly in CI.${NC}"
+        echo -e "${GREEN}🎉 All tests passed! Harborhook is working correctly in CI.${NC}" >&2
         exit 0
     else
-        echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
+        echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}" >&2
         exit 1
     fi
 }
