@@ -160,8 +160,6 @@ fakeReceiver:
 
 # Configuration for the postgresql subchart
 postgres:
-  # Use the alias 'postgres' to match our service naming
-  # fullnameOverride: "{{ .Release.Name }}-postgres"
   image:
     # Use latest tag for the hardened Bitnami PostgreSQL image
     tag: "latest"
@@ -172,7 +170,7 @@ postgres:
     password: "postgres"
   primary:
     persistence:
-      enabled: false
+      enabled: true
       size: 1Gi
     initdb:
       # Database initialization scripts - executed in alphabetical order

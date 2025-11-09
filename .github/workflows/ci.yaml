@@ -247,7 +247,5 @@ jobs:
 
       - name: Run e2e test script
         run: |
-          echo "Running e2e tests..."
-          # For now, just ping the services
-          kubectl get svc
-          echo "TODO: Implement comprehensive e2e tests"
+          chmod +x ./scripts/ci/e2e_test.sh
+          RELEASE_NAME=test ./scripts/ci/e2e_test.sh
