@@ -85,15 +85,27 @@ get_jwt_token() {
     print_test "Getting JWT token for authentication"
 
     # Port forward jwks-server to localhost temporarily
-    kubectl port-forward svc/$JWKS_SERVICE 8082:8082 &
+    kubectl port-forward svc/$JWKS_SERVICE 8082:8082 >/dev/null 2>&1 &
     local PF_PID=$!
-    sleep 2
+    sleep 3  # Give more time for port forward to establish
 
-    local token_response=$(curl -s -X POST "http://localhost:8082/token" \
-        -H "Content-Type: application/json" \
-        -d "{\"tenant_id\":\"$TENANT_ID\"}" 2>/dev/null || echo '{}')
+    # Retry logic for token fetch
+    local token_response=""
+    local retries=3
+    for i in $(seq 1 $retries); do
+        token_response=$(curl -s -X POST "http://localhost:8082/token" \
+            -H "Content-Type: application/json" \
+            -d "{\"tenant_id\":\"$TENANT_ID\"}" 2>/dev/null || echo '{}')
+
+        if [[ "$token_response" != "{}" ]]; then
+            break
+        fi
+        print_info "Token fetch attempt $i/$retries..."
+        sleep 2
+    done
 
     kill $PF_PID 2>/dev/null || true
+    wait $PF_PID 2>/dev/null || true
 
     local token=$(echo "$token_response" | jq -r '.token' 2>/dev/null || echo "null")
 
@@ -103,6 +115,7 @@ get_jwt_token() {
         return 0
     else
         print_fail "Failed to get JWT token"
+        print_info "Response: $token_response"
         return 1
     fi
 }
@@ -145,21 +158,25 @@ test_database() {
     print_header "💾 Database Tests"
 
     print_test "Checking PostgreSQL connectivity"
-    local pg_ready=$(kubectl exec -it ${POSTGRES_SERVICE}-0 -- psql -U postgres -d harborhook -c "SELECT 1;" 2>/dev/null | grep -c "1 row" || echo "0")
+    local pg_output=$(kubectl exec ${POSTGRES_SERVICE}-0 -- psql -U postgres -d harborhook -c "SELECT 1;" 2>/dev/null)
+    local pg_ready=$(echo "$pg_output" | grep "1 row" | wc -l | tr -d '[:space:]')
 
-    if [ "$pg_ready" -gt 0 ]; then
+    if [ "$pg_ready" -gt 0 ] 2>/dev/null; then
         print_pass "PostgreSQL is accessible and responding"
     else
         print_fail "PostgreSQL connectivity issue"
+        print_info "Output: $pg_output"
     fi
 
     print_test "Checking demo tenant exists in database"
-    local tenant_exists=$(kubectl exec -it ${POSTGRES_SERVICE}-0 -- psql -U postgres -d harborhook -c "SELECT id FROM harborhook.tenants WHERE id='$TENANT_ID';" 2>/dev/null | grep -c "$TENANT_ID" || echo "0")
+    local tenant_output=$(kubectl exec ${POSTGRES_SERVICE}-0 -- psql -U postgres -d harborhook -c "SELECT id FROM harborhook.tenants WHERE id='$TENANT_ID';" 2>/dev/null)
+    local tenant_exists=$(echo "$tenant_output" | grep "$TENANT_ID" | wc -l | tr -d '[:space:]')
 
-    if [ "$tenant_exists" -gt 0 ]; then
+    if [ "$tenant_exists" -gt 0 ] 2>/dev/null; then
         print_pass "Demo tenant exists in database"
     else
         print_fail "Demo tenant not found in database"
+        print_info "Output: $tenant_output"
     fi
 }
 
@@ -168,12 +185,13 @@ test_nsq() {
     print_header "📨 NSQ Tests"
 
     print_test "Checking NSQ admin interface"
-    kubectl port-forward svc/$NSQADMIN_SERVICE 4171:4171 &
+    kubectl port-forward svc/$NSQADMIN_SERVICE 4171:4171 >/dev/null 2>&1 &
     local PF_PID=$!
-    sleep 2
+    sleep 3
 
     local nsq_response=$(curl -s "http://localhost:4171/api/topics" 2>/dev/null || echo "error")
     kill $PF_PID 2>/dev/null || true
+    wait $PF_PID 2>/dev/null || true
 
     if [[ "$nsq_response" != "error" ]]; then
         print_pass "NSQ admin interface is accessible"
@@ -195,25 +213,42 @@ test_e2e_workflow() {
 
     # Port forward envoy gateway
     print_info "Setting up port forward to Envoy gateway"
-    kubectl port-forward svc/$ENVOY_SERVICE 8443:8443 &
+    kubectl port-forward svc/$ENVOY_SERVICE 8443:8443 >/dev/null 2>&1 &
     local ENVOY_PF_PID=$!
-    sleep 3
+    sleep 5  # Give more time for port forward to be ready
 
     # Port forward fake receiver to check logs
-    kubectl port-forward svc/$FAKE_RECEIVER_SERVICE 8081:8081 &
+    kubectl port-forward svc/$FAKE_RECEIVER_SERVICE 8081:8081 >/dev/null 2>&1 &
     local FAKE_PF_PID=$!
     sleep 2
 
     # Test 1: Ping the ingest service
     print_test "Pinging ingest service through Envoy"
-    local ping_response=$(curl -sk -X GET "https://localhost:8443/v1/ping" \
-        -H "Authorization: Bearer $JWT_TOKEN" 2>/dev/null || echo '{}')
+    print_info "Using JWT token: ${JWT_TOKEN:0:50}..."
+
+    # Try multiple times in case port forward isn't quite ready
+    local ping_response=""
+    local retries=3
+    for i in $(seq 1 $retries); do
+        ping_response=$(curl -sk -X GET "https://localhost:8443/v1/ping" \
+            -H "Authorization: Bearer $JWT_TOKEN" 2>&1)
+
+        local ping_message=$(echo "$ping_response" | jq -r '.message' 2>/dev/null || echo "null")
+        if [[ "$ping_message" != "null" && -n "$ping_message" ]]; then
+            print_pass "Ingest service ping successful: $ping_message"
+            break
+        fi
+
+        if [ $i -lt $retries ]; then
+            print_info "Ping attempt $i/$retries failed, retrying..."
+            sleep 3
+        fi
+    done
 
     local ping_message=$(echo "$ping_response" | jq -r '.message' 2>/dev/null || echo "null")
-    if [[ "$ping_message" != "null" && -n "$ping_message" ]]; then
-        print_pass "Ingest service ping successful: $ping_message"
-    else
-        print_fail "Ingest service ping failed"
+    if [[ "$ping_message" == "null" || -z "$ping_message" ]]; then
+        print_fail "Ingest service ping failed after $retries attempts"
+        print_info "Response: $ping_response"
         kill $ENVOY_PF_PID $FAKE_PF_PID 2>/dev/null || true
         return 1
     fi
@@ -310,6 +345,7 @@ test_e2e_workflow() {
 
     # Cleanup port forwards
     kill $ENVOY_PF_PID $FAKE_PF_PID 2>/dev/null || true
+    wait $ENVOY_PF_PID $FAKE_PF_PID 2>/dev/null || true
 
     print_info "E2E workflow test completed"
 }
