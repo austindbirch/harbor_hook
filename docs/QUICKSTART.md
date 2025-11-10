@@ -60,10 +60,14 @@ Choose your deployment path and ensure you have the required tools:
 
 This method uses **pre-built images** from GitHub Container Registry. No compilation needed!
 
+**Prerequisites**:
+- Docker daemon installed and running. Docker Desktop is recommended, but Rancher works as well. Enable Kubernetes with 'kind' provisioning method.
+
 ### Step 1: Create Local Kubernetes Cluster
 
 ```bash
-# Install KinD (Kubernetes in Docker) if not already installed
+# Install KinD
+
 # macOS
 brew install kind
 
@@ -243,6 +247,64 @@ kubectl logs -l app.kubernetes.io/component=fake-receiver --tail=20
 
 🎉 **Congratulations!** You've successfully published an event and delivered a webhook using Harborhook!
 
+### Step 7: Seed Demo Data (Optional)
+
+For testing and demonstrations, you can populate Harborhook with realistic sample data using the provided seeding script.
+
+```bash
+# Run the data seeding script
+# Scale options: small (5 endpoints, 100 events), medium (15/500), large (30/2000)
+./scripts/kind/seed_data.sh
+
+# Or specify a scale explicitly
+SEED_SCALE=medium ./scripts/kind/seed_data.sh
+
+# Or with custom Helm release name
+RELEASE_NAME=harborhook SEED_SCALE=large ./scripts/kind/seed_data.sh
+```
+
+**What this creates:**
+- Multiple webhook endpoints (90% working, 10% failing for DLQ demonstration)
+- Event subscriptions for various event types
+- Published events with realistic payloads
+- Demonstrates delivery flow, retries, and DLQ behavior
+
+**After seeding, verify the data:**
+
+```bash
+# View endpoints
+curl -sk "https://localhost:8443/v1/tenants/tn_demo/endpoints" \
+  -H "Authorization: Bearer $TOKEN" | jq '.endpoints | length'
+
+# Check NSQ queue depth
+curl -s "http://localhost:4171/api/topics/deliveries" | jq .depth
+
+# View database statistics
+kubectl exec harborhook-postgres-0 -- env PGPASSWORD=postgres psql -U postgres -d harborhook -c \
+  "SELECT
+     (SELECT COUNT(*) FROM harborhook.endpoints) as endpoints,
+     (SELECT COUNT(*) FROM harborhook.subscriptions) as subscriptions,
+     (SELECT COUNT(*) FROM harborhook.events) as events,
+     (SELECT COUNT(*) FROM harborhook.deliveries) as deliveries,
+     (SELECT COUNT(*) FROM harborhook.dlq) as dlq_entries;"
+```
+
+**Monitor delivery progress:**
+
+```bash
+# Watch deliveries in real-time
+kubectl logs -f -l app.kubernetes.io/component=worker
+
+# Open NSQ Admin to see queue processing
+# http://localhost:4171 (with port-forward active)
+```
+
+The seeding script is perfect for:
+- Load testing and performance benchmarking
+- Demonstrating DLQ and retry behavior
+- Populating dashboards with metrics
+- Testing at scale before production
+
 ---
 
 ## Local Development: Docker Compose (Build from Source)
@@ -352,6 +414,41 @@ docker-compose restart worker
 
 # Test your changes
 ```
+
+### Step 8: Seed Demo Data (Optional)
+
+For local development and testing with Docker Compose, use the observability demo script:
+
+```bash
+# Seed realistic demo data
+./scripts/observability/demo.sh
+
+# This creates:
+# - Multiple webhook endpoints
+# - Event subscriptions
+# - Published events with varied payloads
+# - Demonstrates full delivery pipeline
+```
+
+**Verify the seeded data:**
+
+```bash
+# Check endpoints
+docker exec hh-postgres psql -U postgres -d harborhook -c \
+  "SELECT COUNT(*) FROM harborhook.endpoints;"
+
+# View events
+docker exec hh-postgres psql -U postgres -d harborhook -c \
+  "SELECT id, event_type, created_at FROM harborhook.events ORDER BY created_at DESC LIMIT 5;"
+
+# Monitor in NSQ Admin
+open http://localhost:4171
+
+# View in Grafana dashboards
+open http://localhost:3000  # Login: admin/admin
+```
+
+**Note**: For Kubernetes/KinD deployments, use `./scripts/kind/seed_data.sh` instead.
 
 ---
 

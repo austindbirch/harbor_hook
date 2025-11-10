@@ -165,6 +165,7 @@ open http://localhost:4171  # NSQ Admin
 |------|---------|
 | **harborctl** | CLI for managing endpoints, subscriptions, events |
 | **Fake Receiver** | Test webhook endpoint with signature verification |
+| **Data Seeding** | Scripts to populate realistic demo data (KinD/Docker Compose) |
 | **E2E Tests** | Automated integration tests for CI/CD |
 
 ### Observability
@@ -210,7 +211,8 @@ open http://localhost:4171  # NSQ Admin
 - **Unit tests**: Core business logic coverage
 - **E2E tests**: Full workflow validation in CI
 - **Signature verification tests**: Security validation
-- **Load testing**: Performance benchmarking (manual)
+- **Data seeding**: Realistic demo data for testing and benchmarking
+- **Load testing**: Performance benchmarking with configurable scales (small/medium/large)
 
 ---
 
