@@ -307,6 +307,71 @@ The seeding script is perfect for:
 - Populating dashboards with metrics
 - Testing at scale before production
 
+### Step 8: Access Observability Stack (Kubernetes only)
+
+The Kubernetes deployment includes a full observability stack with Prometheus, Grafana, Tempo, and Alertmanager. The observability stacks also ships with the local docker-compose build, and config should be identical between both environments.
+
+**Set up port forwarding for observability services:**
+
+```bash
+# Terminal 4: Prometheus (metrics)
+kubectl port-forward svc/harborhook-prometheus-server 9090:80
+# Open: http://localhost:9090
+
+# Terminal 5: Grafana (dashboards)
+kubectl port-forward svc/harborhook-grafana 3000:80
+# Open: http://localhost:3000
+
+# Terminal 6 (optional): Alertmanager
+kubectl port-forward svc/harborhook-alertmanager 9093:9093
+# Open: http://localhost:9093
+```
+
+**Access Grafana:**
+
+```bash
+# Get the auto-generated Grafana admin password
+kubectl get secret harborhook-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+echo
+
+# Login credentials:
+# Username: admin
+# Password: <output from above command>
+```
+
+**Check Harborhook metrics in Prometheus:**
+
+Navigate to http://localhost:9090 and try these queries:
+
+```promql
+# Event publishing rate
+rate(harborhook_events_published_total[5m])
+
+# Delivery success rate
+rate(harborhook_deliveries_total{status="delivered"}[5m])
+  / rate(harborhook_deliveries_total[5m])
+
+# P95 delivery latency
+histogram_quantile(0.95, rate(harborhook_delivery_latency_seconds_bucket[5m]))
+
+# Worker backlog depth
+harborhook_nsq_topic_depth{topic="deliveries"}
+
+# Total retries by reason
+rate(harborhook_retries_total[5m]) by (reason)
+```
+
+**Available observability components:**
+
+| Service | Purpose | Default Port | Access URL |
+|---------|---------|--------------|------------|
+| **Prometheus** | Metrics collection & querying | 9090 | http://localhost:9090 |
+| **Grafana** | Unified dashboards | 3000 | http://localhost:3000 |
+| **Tempo** | Distributed tracing | 3200 | (internal only) |
+| **Alertmanager** | Alert routing & deduplication | 9093 | http://localhost:9093 |
+
+**Note**: Loki (log aggregation) and Promtail (log shipping) are disabled by default in the Kubernetes deployment. They require object storage configuration (S3, GCS, or Azure Blob). If needed, you can configure them in `charts/harborhook/values.yaml` under `observability.loki.enabled`.
+
 ---
 
 ## Local Development: Docker Compose (Build from Source)

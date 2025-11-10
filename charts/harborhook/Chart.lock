@@ -5,5 +5,20 @@ dependencies:
 - name: nsq
   repository: https://nsqio.github.io/helm-chart
   version: 0.0.11
-digest: sha256:50a3518d4010229c995af3fbe2cf8f2a3cc3121c3d302d853e34d4bd29605903
-generated: "2025-11-09T11:03:55.373329-07:00"
+- name: prometheus
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 25.30.0
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 10.1.4
+- name: loki
+  repository: https://grafana.github.io/helm-charts
+  version: 6.46.0
+- name: tempo
+  repository: https://grafana.github.io/helm-charts
+  version: 1.24.0
+- name: promtail
+  repository: https://grafana.github.io/helm-charts
+  version: 6.17.1
+digest: sha256:3a6bd8409b48444af59d3d4dde833e1b677c492daf29d8398b86e80e624ca161
+generated: "2025-11-10T13:40:07.779919-07:00"

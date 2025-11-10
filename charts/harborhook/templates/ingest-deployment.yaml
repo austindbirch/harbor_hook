@@ -20,6 +20,10 @@ spec:
       app.kubernetes.io/component: ingest
   template:
     metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.ingest.service.httpPort }}"
+        prometheus.io/path: "/metrics"
       labels:
         app.kubernetes.io/name: {{ include "harborhook.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}

@@ -189,7 +189,8 @@ jobs:
             --set nsqMonitor.image.tag=${{ github.sha }} \
             --set ingest.certsSecretName=test-harborhook-certs \
             --set worker.certsSecretName=test-harborhook-certs \
-            --set envoy.certsSecretName=test-harborhook-certs
+            --set envoy.certsSecretName=test-harborhook-certs \
+            --set observability.enabled=false
 
       - name: Wait for deployments to be ready
         run: kubectl wait --for=condition=Available --timeout=2m deployment --all

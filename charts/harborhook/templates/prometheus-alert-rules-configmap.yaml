@@ -1,0 +1,239 @@
+{{- if .Values.observability.prometheus.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "harborhook.fullname" . }}-alert-rules
+  labels:
+    {{- include "harborhook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability
+data:
+  alert-rules.yaml: |
+    groups:
+      - name: harbor_hook_slo_alerts
+        rules:
+          # SLO Burn Rate Alerts - Multi-window approach
+          - alert: HarborHookSLOBurnRateHigh
+            expr: |
+              (
+                sum(rate(harborhook_deliveries_total{status="failed"}[1h])) /
+                sum(rate(harborhook_deliveries_total[1h]))
+              ) > (10 * 0.001)
+            for: 2m
+            labels:
+              severity: critical
+              alert_type: slo_burn_rate
+            annotations:
+              summary: "Harborhook SLO burn rate is critically high"
+              description: "The error rate is burning through the SLO error budget 10x faster than acceptable. Current burn rate: {{`{{ $value }}`}}x"
+              error_budget: "{{`{{ $value | printf \"%.1f\" }}`}}%"
+              burn_rate: "{{`{{ $value | printf \"%.1f\" }}`}}"
+              time_to_breach: "~6 hours at current rate"
+              runbook: "https://example.com/runbooks/slo-burn-rate"
+
+          - alert: HarborHookSLOBurnRateModerate
+            expr: |
+              (
+                sum(rate(harborhook_deliveries_total{status="failed"}[1h])) /
+                sum(rate(harborhook_deliveries_total[1h]))
+              ) > (5 * 0.001)
+            for: 5m
+            labels:
+              severity: warning
+              alert_type: slo_burn_rate
+            annotations:
+              summary: "Harborhook SLO burn rate is elevated"
+              description: "The error rate is burning through the SLO error budget 5x faster than acceptable. Current burn rate: {{`{{ $value }}`}}x"
+              error_budget: "{{`{{ $value | printf \"%.1f\" }}`}}%"
+              burn_rate: "{{`{{ $value | printf \"%.1f\" }}`}}"
+              time_to_breach: "~12 hours at current rate"
+              runbook: "https://example.com/runbooks/slo-burn-rate"
+
+          - alert: HarborHookSLOBurnRateSlow
+            expr: |
+              (
+                sum(rate(harborhook_deliveries_total{status="failed"}[6h])) /
+                sum(rate(harborhook_deliveries_total[6h]))
+              ) > (2 * 0.001)
+            for: 30m
+            labels:
+              severity: warning
+              alert_type: slo_burn_rate
+            annotations:
+              summary: "Harborhook SLO burn rate is consistently elevated"
+              description: "The error rate is burning through the SLO error budget 2x faster than acceptable over 6 hours"
+              error_budget: "{{`{{ $value | printf \"%.1f\" }}`}}%"
+              burn_rate: "{{`{{ $value | printf \"%.1f\" }}`}}"
+              time_to_breach: "~2 days at current rate"
+              runbook: "https://example.com/runbooks/slo-burn-rate"
+
+      - name: harbor_hook_system_alerts
+        rules:
+          # Backlog Growth Alerts
+          - alert: HarborHookBacklogHigh
+            expr: harborhook_worker_backlog_depth > 1000
+            for: 5m
+            labels:
+              severity: warning
+              alert_type: backlog
+            annotations:
+              summary: "Harborhook backlog is high"
+              description: "NSQ delivery queue has {{`{{ $value }}`}} messages backlog. Normal operation should be < 100."
+              runbook: "https://example.com/runbooks/backlog-high"
+
+          - alert: HarborHookBacklogCritical
+            expr: harborhook_worker_backlog_depth > 5000
+            for: 2m
+            labels:
+              severity: critical
+              alert_type: backlog
+            annotations:
+              summary: "Harborhook backlog is critically high"
+              description: "NSQ delivery queue has {{`{{ $value }}`}} messages backlog. System may be overwhelmed."
+              runbook: "https://example.com/runbooks/backlog-critical"
+
+          - alert: HarborHookBacklogGrowthRate
+            expr: increase(harborhook_worker_backlog_depth[10m]) > 500
+            for: 2m
+            labels:
+              severity: warning
+              alert_type: backlog_growth
+            annotations:
+              summary: "Harborhook backlog growing rapidly"
+              description: "Backlog increased by {{`{{ $value }}`}} messages in 10 minutes. Check for worker issues or traffic spikes."
+              runbook: "https://example.com/runbooks/backlog-growth"
+
+          # Latency Alerts
+          - alert: HarborHookLatencyHigh
+            expr: histogram_quantile(0.99, rate(harborhook_delivery_latency_seconds_bucket[5m])) > 5
+            for: 10m
+            labels:
+              severity: warning
+              alert_type: latency
+            annotations:
+              summary: "Harborhook P99 latency is high"
+              description: "P99 delivery latency is {{`{{ $value }}`}}s, above the 5s SLO target for {{`{{ .Labels.tenant_id }}`}}"
+              runbook: "https://example.com/runbooks/latency-high"
+
+          - alert: HarborHookLatencyCritical
+            expr: histogram_quantile(0.99, rate(harborhook_delivery_latency_seconds_bucket[5m])) > 10
+            for: 5m
+            labels:
+              severity: critical
+              alert_type: latency
+            annotations:
+              summary: "Harborhook P99 latency is critically high"
+              description: "P99 delivery latency is {{`{{ $value }}`}}s, more than double the SLO target for {{`{{ .Labels.tenant_id }}`}}"
+              runbook: "https://example.com/runbooks/latency-critical"
+
+          # Success Rate Alerts
+          - alert: HarborHookSuccessRateLow
+            expr: |
+              (
+                sum(rate(harborhook_deliveries_total{status="delivered"}[5m])) /
+                (sum(rate(harborhook_deliveries_total{status="delivered"}[5m])) + sum(rate(harborhook_deliveries_total{status="failed"}[5m])))
+              ) * 100 < 99.9
+            for: 5m
+            labels:
+              severity: warning
+              alert_type: success_rate
+            annotations:
+              summary: "Harborhook success rate below SLO"
+              description: "Current success rate is {{`{{ $value | printf \"%.2f\" }}`}}% for {{`{{ .Labels.tenant_id }}`}}, below 99.9% SLO"
+              runbook: "https://example.com/runbooks/success-rate-low"
+
+          - alert: HarborHookSuccessRateCritical
+            expr: |
+              (
+                sum(rate(harborhook_deliveries_total{status="delivered"}[5m])) /
+                (sum(rate(harborhook_deliveries_total{status="delivered"}[5m])) + sum(rate(harborhook_deliveries_total{status="failed"}[5m])))
+              ) * 100 < 95
+            for: 2m
+            labels:
+              severity: critical
+              alert_type: success_rate
+            annotations:
+              summary: "Harborhook success rate critically low"
+              description: "Current success rate is {{`{{ $value | printf \"%.2f\" }}`}}% for {{`{{ .Labels.tenant_id }}`}}, far below SLO"
+              runbook: "https://example.com/runbooks/success-rate-critical"
+
+      - name: harbor_hook_infrastructure_alerts
+        rules:
+          # Service Health Alerts
+          - alert: HarborHookServiceDown
+            expr: up{job=~"ingest|worker"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              alert_type: service_down
+            annotations:
+              summary: "Harborhook service is down"
+              description: "The {{`{{ .Labels.job }}`}} service has been down for more than 1 minute"
+              runbook: "https://example.com/runbooks/service-down"
+
+          - alert: HarborHookNoTraffic
+            expr: rate(harborhook_events_published_total[10m]) == 0
+            for: 15m
+            labels:
+              severity: warning
+              alert_type: no_traffic
+            annotations:
+              summary: "Harborhook receiving no traffic"
+              description: "No events have been published for 15 minutes. Check if this is expected."
+              runbook: "https://example.com/runbooks/no-traffic"
+
+          # DLQ Growth Alerts
+          - alert: HarborHookDLQGrowth
+            expr: increase(harborhook_dlq_messages_total[1h]) > 50
+            for: 5m
+            labels:
+              severity: warning
+              alert_type: dlq_growth
+            annotations:
+              summary: "Harborhook DLQ messages increasing"
+              description: "{{`{{ $value }}`}} messages added to DLQ in the last hour. Check for recurring delivery failures."
+              runbook: "https://example.com/runbooks/dlq-growth"
+
+          # Retry Rate Alerts
+          - alert: HarborHookRetryRateHigh
+            expr: rate(harborhook_retries_total[5m]) > 10
+            for: 10m
+            labels:
+              severity: warning
+              alert_type: retry_rate
+            annotations:
+              summary: "Harborhook retry rate is high"
+              description: "Retry rate is {{`{{ $value }}`}}/sec for reason: {{`{{ .Labels.reason }}`}}. Check endpoint health."
+              runbook: "https://example.com/runbooks/retry-rate-high"
+
+      - name: harbor_hook_tenant_alerts
+        rules:
+          # Per-tenant failure rate alerts
+          - alert: HarborHookTenantFailureRateHigh
+            expr: |
+              (
+                rate(harborhook_deliveries_total{status="failed"}[5m]) /
+                rate(harborhook_deliveries_total[5m])
+              ) > 0.1
+            for: 10m
+            labels:
+              severity: warning
+              alert_type: tenant_failure_rate
+            annotations:
+              summary: "High failure rate for tenant {{`{{ .Labels.tenant_id }}`}}"
+              description: "Tenant {{`{{ .Labels.tenant_id }}`}} has {{`{{ $value | printf \"%.2f\" }}`}}% failure rate. Check endpoint health."
+              runbook: "https://example.com/runbooks/tenant-failure-rate"
+
+          # Per-endpoint alerts
+          - alert: HarborHookEndpointDown
+            expr: |
+              rate(harborhook_http_deliveries_total{status_code=~"5.."}[5m]) /
+              rate(harborhook_http_deliveries_total[5m]) > 0.8
+            for: 5m
+            labels:
+              severity: critical
+              alert_type: endpoint_down
+            annotations:
+              summary: "Endpoint appears to be down"
+              description: "Endpoint {{`{{ .Labels.endpoint_id }}`}} has 80%+ 5xx responses for tenant {{`{{ .Labels.tenant_id }}`}}"
+              runbook: "https://example.com/runbooks/endpoint-down"
+{{- end }}

@@ -358,3 +358,244 @@ nsqMonitor:
     prometheus.io/scrape: "true"
     prometheus.io/port: 8084
     prometheus.io/path: "/metrics"
+
+# Observability stack configuration
+observability:
+  # -- Enable/disable the entire observability stack
+  enabled: true
+
+  # Prometheus configuration (using prometheus-community chart)
+  prometheus:
+    enabled: true
+    server:
+      service:
+        type: ClusterIP
+        servicePort: 9090
+      retention: "15d"
+      extraConfigmapMounts:
+        - name: alert-rules
+          mountPath: /etc/config/alert-rules.yaml
+          subPath: alert-rules.yaml
+          configMap: '{{ include "harborhook.fullname" . }}-alert-rules'
+          readOnly: true
+    alertmanager:
+      enabled: true
+      service:
+        type: ClusterIP
+        servicePort: 9093
+    configmapReload:
+      prometheus:
+        enabled: true
+      alertmanager:
+        enabled: true
+    serverFiles:
+      alerting_rules.yml: {}
+      recording_rules.yml: {}
+      prometheus.yml:
+        rule_files:
+          - /etc/config/alert-rules.yaml
+        scrape_configs:
+          - job_name: prometheus
+            static_configs:
+              - targets:
+                  - localhost:9090
+          - job_name: ingest
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names:
+                    - default
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+                action: keep
+                regex: ingest
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: true
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+                action: replace
+                target_label: __address__
+                regex: (.+)
+                replacement: __meta_kubernetes_pod_ip:$1
+          - job_name: worker
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names:
+                    - default
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+                action: keep
+                regex: worker
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: true
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+                action: replace
+                target_label: __address__
+                regex: (.+)
+                replacement: __meta_kubernetes_pod_ip:$1
+          - job_name: nsq-monitor
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names:
+                    - default
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+                action: keep
+                regex: nsq-monitor
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: true
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+                action: replace
+                target_label: __address__
+                regex: (.+)
+                replacement: __meta_kubernetes_pod_ip:$1
+    alertmanagerFiles:
+      alertmanager.yml:
+        global: {}
+        route:
+          group_by: ['alertname', 'cluster', 'service']
+          group_wait: 10s
+          group_interval: 10s
+          repeat_interval: 12h
+          receiver: 'null'
+        receivers:
+          - name: 'null'
+
+  # Grafana configuration (using grafana community chart)
+  grafana:
+    enabled: true
+    service:
+      type: ClusterIP
+      port: 80
+    adminUser: admin
+    adminPassword: admin
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://{{ .Release.Name }}-prometheus-server:9090
+            isDefault: true
+            editable: true
+          - name: Tempo
+            type: tempo
+            access: proxy
+            url: http://{{ .Release.Name }}-tempo:3200
+            editable: true
+            jsonData:
+              httpMethod: GET
+              tracesToMetrics:
+                datasourceUid: 'prometheus'
+                spanStartTimeShift: '-1h'
+                spanEndTimeShift: '1h'
+              serviceMap:
+                datasourceUid: 'prometheus'
+              nodeGraph:
+                enabled: true
+              search:
+                hide: false
+              spanBar:
+                type: 'Tag'
+                tag: 'http.path'
+
+  # Loki configuration (using SingleBinary mode for filesystem storage)
+  # Note: Disabled temporarily - needs proper object storage configuration
+  loki:
+    enabled: false
+    deploymentMode: SingleBinary
+    loki:
+      auth_enabled: false
+      commonConfig:
+        replication_factor: 1
+      storage:
+        type: 'filesystem'
+        bucketNames:
+          chunks: chunks
+          ruler: ruler
+          admin: admin
+      schemaConfig:
+        configs:
+          - from: "2025-09-01"
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+    singleBinary:
+      replicas: 1
+    # Explicitly disable other components for SingleBinary mode
+    write:
+      replicas: 0
+    read:
+      replicas: 0
+    backend:
+      replicas: 0
+
+  # Tempo configuration
+  tempo:
+    enabled: true
+    service:
+      type: ClusterIP
+      port: 3200
+    tempo:
+      receiversConfig:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+      metricsGenerator:
+        enabled: true
+        remoteWriteUrl: "http://{{ .Release.Name }}-prometheus-server:9090/api/v1/write"
+      storage:
+        trace:
+          backend: local
+          local:
+            path: /var/tempo/traces
+
+  # Promtail configuration
+  # Note: Disabled temporarily since Loki is disabled
+  promtail:
+    enabled: false
+    config:
+      clients:
+        - url: http://{{ .Release.Name }}-loki:3100/loki/api/v1/push
+      positions:
+        filename: /tmp/positions.yaml
+      scrapeConfigs:
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+              target_label: component
+            - source_labels: [__meta_kubernetes_pod_name]
+              target_label: pod
+            - source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+          pipeline_stages:
+            - json:
+                expressions:
+                  timestamp: time
+                  level: level
+                  message: msg
+                  trace_id: trace_id
+                  tenant_id: tenant_id
+                  event_id: event_id
+                  delivery_id: delivery_id
+                  endpoint_id: endpoint_id
+            - timestamp:
+                source: timestamp
+                format: RFC3339Nano
+            - labels:
+                level:
+                trace_id:
+                tenant_id:

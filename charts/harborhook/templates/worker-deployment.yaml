@@ -13,6 +13,10 @@ spec:
       app.kubernetes.io/component: worker
   template:
     metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.worker.service.httpPort }}"
+        prometheus.io/path: "/metrics"
       labels:
         {{- include "harborhook.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker
