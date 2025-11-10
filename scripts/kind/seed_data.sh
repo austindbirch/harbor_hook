@@ -13,30 +13,30 @@ CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
-# Print colored output
+# Print colored output (all to stderr to avoid interfering with function return values)
 print_header() {
-    echo -e "\n${PURPLE}$1${NC}"
-    echo "=============================================="
+    echo -e "\n${PURPLE}$1${NC}" >&2
+    echo "==============================================" >&2
 }
 
 print_step() {
-    echo -e "${BLUE}==> $1${NC}"
+    echo -e "${BLUE}==> $1${NC}" >&2
 }
 
 print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${GREEN}✓ $1${NC}" >&2
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    echo -e "${YELLOW}⚠ $1${NC}" >&2
 }
 
 print_error() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}✗ $1${NC}" >&2
 }
 
 print_info() {
-    echo -e "${CYAN}ℹ $1${NC}"
+    echo -e "${CYAN}ℹ $1${NC}" >&2
 }
 
 # Configuration
@@ -74,13 +74,13 @@ FAILURE_RATE=10  # 10% of events will be destined for failing endpoints
 PORT_FORWARD_PIDS=()
 
 print_header "🌱 Harborhook Data Seeding Script"
-echo "Configuration:"
-echo "  • Scale: $SEED_SCALE"
-echo "  • Endpoints: $NUM_ENDPOINTS"
-echo "  • Event Types: $NUM_EVENT_TYPES"
-echo "  • Events: $NUM_EVENTS"
-echo "  • Tenant: $TENANT_ID"
-echo ""
+echo "Configuration:" >&2
+echo "  • Scale: $SEED_SCALE" >&2
+echo "  • Endpoints: $NUM_ENDPOINTS" >&2
+echo "  • Event Types: $NUM_EVENT_TYPES" >&2
+echo "  • Events: $NUM_EVENTS" >&2
+echo "  • Tenant: $TENANT_ID" >&2
+echo "" >&2
 
 # Cleanup function
 cleanup() {
@@ -248,14 +248,14 @@ create_endpoints() {
 
             # Progress indicator
             if [ $((i % 5)) -eq 0 ]; then
-                echo -n "."
+                echo -n "." >&2
             fi
         else
             print_warning "Failed to create endpoint $i"
         fi
     done
 
-    echo ""
+    echo "" >&2
     print_success "Created $((success_count + fail_count)) endpoints ($success_count working, $fail_count failing)"
 
     echo "$endpoints_file"
@@ -332,13 +332,13 @@ create_subscriptions() {
 
                 # Progress indicator
                 if [ $((sub_count % 10)) -eq 0 ]; then
-                    echo -n "."
+                    echo -n "." >&2
                 fi
             fi
         done
     done
 
-    echo ""
+    echo "" >&2
     print_success "Created $sub_count subscriptions"
 
     echo "$subscriptions_file"
@@ -447,7 +447,7 @@ EOF
         esac
     done
 
-    echo ""
+    echo "" >&2
     print_success "Published $success_count/$event_count events successfully"
 
     if [ $error_count -gt 0 ]; then
@@ -487,15 +487,15 @@ show_statistics() {
         failed=$(echo "$failed" | tr -d '[:space:]')
         dead=$(echo "$dead" | tr -d '[:space:]')
 
-        echo ""
-        echo "  Events:        $events"
-        echo "  Endpoints:     $endpoints"
-        echo "  Subscriptions: $subscriptions"
-        echo "  Deliveries:    $deliveries"
-        echo "    ├─ Delivered: $delivered"
-        echo "    ├─ Failed:    $failed"
-        echo "    └─ Dead (DLQ): $dead"
-        echo ""
+        echo "" >&2
+        echo "  Events:        $events" >&2
+        echo "  Endpoints:     $endpoints" >&2
+        echo "  Subscriptions: $subscriptions" >&2
+        echo "  Deliveries:    $deliveries" >&2
+        echo "    ├─ Delivered: $delivered" >&2
+        echo "    ├─ Failed:    $failed" >&2
+        echo "    └─ Dead (DLQ): $dead" >&2
+        echo "" >&2
     else
         print_warning "Could not retrieve statistics from database"
     fi
@@ -505,30 +505,30 @@ show_statistics() {
 show_access_instructions() {
     print_header "🎯 Next Steps"
 
-    echo "Your Harborhook instance is now seeded with test data!"
-    echo ""
-    echo "To explore the data:"
-    echo ""
-    echo "1. Query events via API:"
-    echo "   curl -sk 'https://localhost:8443/v1/events/<event_id>/deliveries' \\"
-    echo "     -H 'Authorization: Bearer \$JWT_TOKEN'"
-    echo ""
-    echo "2. Check NSQ queue (in another terminal):"
-    echo "   kubectl port-forward svc/${RELEASE_NAME}-nsq-nsqadmin 4171:4171"
-    echo "   open http://localhost:4171"
-    echo ""
-    echo "3. View logs:"
-    echo "   kubectl logs -l app.kubernetes.io/component=worker --tail=100"
-    echo "   kubectl logs -l app.kubernetes.io/component=ingest --tail=100"
-    echo ""
-    echo "4. Query database directly:"
-    echo "   kubectl exec ${RELEASE_NAME}-postgres-0 -- env PGPASSWORD=postgres \\"
-    echo "     psql -U postgres -d harborhook -c 'SELECT * FROM harborhook.events LIMIT 10;'"
-    echo ""
+    echo "Your Harborhook instance is now seeded with test data!" >&2
+    echo "" >&2
+    echo "To explore the data:" >&2
+    echo "" >&2
+    echo "1. Query events via API:" >&2
+    echo "   curl -sk 'https://localhost:8443/v1/events/<event_id>/deliveries' \\" >&2
+    echo "     -H 'Authorization: Bearer \$JWT_TOKEN'" >&2
+    echo "" >&2
+    echo "2. Check NSQ queue (in another terminal):" >&2
+    echo "   kubectl port-forward svc/${RELEASE_NAME}-nsq-nsqadmin 4171:4171" >&2
+    echo "   open http://localhost:4171" >&2
+    echo "" >&2
+    echo "3. View logs:" >&2
+    echo "   kubectl logs -l app.kubernetes.io/component=worker --tail=100" >&2
+    echo "   kubectl logs -l app.kubernetes.io/component=ingest --tail=100" >&2
+    echo "" >&2
+    echo "4. Query database directly:" >&2
+    echo "   kubectl exec ${RELEASE_NAME}-postgres-0 -- env PGPASSWORD=postgres \\" >&2
+    echo "     psql -U postgres -d harborhook -c 'SELECT * FROM harborhook.events LIMIT 10;'" >&2
+    echo "" >&2
 
     print_info "Your JWT token (valid for 1 hour):"
-    echo "export JWT_TOKEN='$JWT_TOKEN'"
-    echo ""
+    echo "export JWT_TOKEN='$JWT_TOKEN'" >&2
+    echo "" >&2
 
     print_warning "Note: Webhook deliveries happen asynchronously. Some deliveries may still be in progress."
     print_info "Wait 30-60 seconds for all deliveries to complete, then check statistics again."
