@@ -14,7 +14,7 @@ Harborhook has been installed.
    cd ../../../..
 
 2. **Create the Kubernetes Secret:**
-   Use the following kubectl command to create the secret from the generated files. This command assumes you are at the root of the harbor_hook project.
+   Use the following kubectl command to create the secret from the generated files. This command assumes you are at the root of the project.
 
    kubectl create secret generic {{ .Values.ingest.certsSecretName | default (printf "%s-certs" (include "harborhook.fullname" .)) }} \
      --from-file=ca.crt=./deploy/docker/envoy/certs/ca.crt \

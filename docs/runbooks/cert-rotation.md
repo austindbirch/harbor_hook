@@ -56,7 +56,7 @@ openssl x509 -in server.crt -noout -checkend $((30*86400))
 # Exit code 1 = expires within 30 days
 
 # For Kubernetes
-kubectl get secret test-harborhook-certs -o json | \
+kubectl get secret harborhook-certs -o json | \
   jq -r '.data["server.crt"]' | base64 -d | \
   openssl x509 -noout -enddate
 ```
@@ -157,13 +157,13 @@ docker-compose logs ingest | grep -i "tls\|ssl\|certificate" | tail -20
 ### Step 1: Backup Current Secret
 ```bash
 # Export current certificate secret
-kubectl get secret test-harborhook-certs -o yaml > certs-backup-$(date +%Y%m%d-%H%M%S).yaml
+kubectl get secret harborhook-certs -o yaml > certs-backup-$(date +%Y%m%d-%H%M%S).yaml
 
 # Verify backup
 cat certs-backup-*.yaml
 
 # Extract and view current certificate details
-kubectl get secret test-harborhook-certs -o json | \
+kubectl get secret harborhook-certs -o json | \
   jq -r '.data["server.crt"]' | base64 -d | \
   openssl x509 -noout -text | head -20
 ```
@@ -182,10 +182,10 @@ openssl verify -CAfile ca.crt client.crt
 ### Step 3: Update Kubernetes Secret
 ```bash
 # Delete old secret
-kubectl delete secret test-harborhook-certs
+kubectl delete secret harborhook-certs
 
 # Create new secret with new certificates
-kubectl create secret generic test-harborhook-certs \
+kubectl create secret generic harborhook-certs \
   --from-file=ca.crt=./ca.crt \
   --from-file=server.crt=./server.crt \
   --from-file=server.key=./server.key \
@@ -193,8 +193,8 @@ kubectl create secret generic test-harborhook-certs \
   --from-file=client.key=./client.key
 
 # Verify secret was created
-kubectl get secret test-harborhook-certs
-kubectl describe secret test-harborhook-certs
+kubectl get secret harborhook-certs
+kubectl describe secret harborhook-certs
 ```
 
 ### Step 4: Rolling Restart of Services
