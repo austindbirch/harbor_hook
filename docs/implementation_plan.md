@@ -126,10 +126,10 @@
     - Run e2e, show success, port-forward nsqadmin and Grafana, browse dashboards
     - Kill a worker pod, show deliveries continue (stateless scale-out)
 - AC:
-    - [ ] Clean install/upgrade
-    - [ ] Green e2e
-    - [ ] Zero manual post-steps
-    - [ ] CI artifacts (k8s test logs, screenshots)
+    - [x] Clean install/upgrade
+    - [x] Green e2e
+    - [x] Zero manual post-steps
+    - [x] CI artifacts (k8s test logs, screenshots)
 
 ---
 ## Phase 7: Runbooks, Documentation, Data Seeding

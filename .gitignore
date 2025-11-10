@@ -24,6 +24,3 @@ deploy/docker/alertmanager/data/
 # Claude
 .claude/
 CLAUDE.md
-
-# Cline
-.clinerules/
