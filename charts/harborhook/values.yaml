@@ -113,7 +113,7 @@ ingest:
     httpPort: 8080
     grpcPort: 50051
   # The name of the secret containing the TLS certificates
-  certsSecretName: test-harborhook-certs
+  certsSecretName: harborhook-certs
 
 # Worker service configuration
 worker:
@@ -124,7 +124,7 @@ worker:
     tag: "latest"
   service:
     httpPort: 8083 # Internal port for metrics/health
-  certsSecretName: test-harborhook-certs
+  certsSecretName: harborhook-certs
   # Worker specific settings
   maxAttempts: 5
   backoffSchedule: "1s,5s,10s,30s,1m"
@@ -339,7 +339,7 @@ envoy:
   service:
     type: LoadBalancer
     httpPort: 8443
-  certsSecretName: test-harborhook-certs
+  certsSecretName: harborhook-certs
 
 # Nsq-monitor configuration
 nsqMonitor:

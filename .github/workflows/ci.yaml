@@ -103,6 +103,7 @@ jobs:
         with:
           context: .
           file: ./cmd/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
@@ -185,7 +186,10 @@ jobs:
             --set worker.image.tag=${{ github.sha }} \
             --set jwksServer.image.tag=${{ github.sha }} \
             --set fakeReceiver.image.tag=${{ github.sha }} \
-            --set nsqMonitor.image.tag=${{ github.sha }}
+            --set nsqMonitor.image.tag=${{ github.sha }} \
+            --set ingest.certsSecretName=test-harborhook-certs \
+            --set worker.certsSecretName=test-harborhook-certs \
+            --set envoy.certsSecretName=test-harborhook-certs
 
       - name: Wait for deployments to be ready
         run: kubectl wait --for=condition=Available --timeout=2m deployment --all
