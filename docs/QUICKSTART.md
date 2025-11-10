@@ -241,8 +241,8 @@ curl -sk -X GET "https://localhost:8443/v1/events/$EVENT_ID/deliveries" \
 kubectl logs -l app.kubernetes.io/component=fake-receiver --tail=20
 
 # You should see log entries like:
-# {"level":"info","msg":"Received webhook","signature":"sha256=...","timestamp":"..."}
-# {"level":"info","msg":"Signature verified successfully"}
+# {timestamp} fake-receiver listening on 8081
+# {timestamp} fake-receiver OK /hook trace_id={string} headers={int} body={string payload}
 ```
 
 🎉 **Congratulations!** You've successfully published an event and delivered a webhook using Harborhook!
@@ -250,6 +250,8 @@ kubectl logs -l app.kubernetes.io/component=fake-receiver --tail=20
 ### Step 7: Seed Demo Data (Optional)
 
 For testing and demonstrations, you can populate Harborhook with realistic sample data using the provided seeding script.
+
+**Note**: The seeding script is compatible with macOS default Bash (3.2+) and Linux Bash (4.0+).
 
 ```bash
 # Run the data seeding script

@@ -268,9 +268,28 @@ create_subscriptions() {
 
     print_step "Creating subscriptions..."
 
+    # Verify input files exist
+    if [ ! -f "$endpoints_file" ]; then
+        print_error "Endpoints file not found: $endpoints_file"
+        exit 1
+    fi
+
+    if [ ! -f "$event_types_file" ]; then
+        print_error "Event types file not found: $event_types_file"
+        exit 1
+    fi
+
     # Read endpoints and event types into arrays
-    mapfile -t endpoints < "$endpoints_file"
-    mapfile -t event_types < "$event_types_file"
+    # Using while loop for Bash 3.2 compatibility (macOS default)
+    local endpoints=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && endpoints+=("$line")
+    done < "$endpoints_file"
+
+    local event_types=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && event_types+=("$line")
+    done < "$event_types_file"
 
     if [ ${#endpoints[@]} -eq 0 ]; then
         print_error "No endpoints available for subscriptions"
@@ -331,7 +350,17 @@ generate_events() {
 
     print_step "Publishing $NUM_EVENTS events..."
 
-    mapfile -t event_types < "$event_types_file"
+    # Verify input file exists
+    if [ ! -f "$event_types_file" ]; then
+        print_error "Event types file not found: $event_types_file"
+        exit 1
+    fi
+
+    # Read event types into array (Bash 3.2 compatible)
+    local event_types=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && event_types+=("$line")
+    done < "$event_types_file"
 
     if [ ${#event_types[@]} -eq 0 ]; then
         print_error "No event types available"
