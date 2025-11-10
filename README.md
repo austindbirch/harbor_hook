@@ -26,18 +26,20 @@ Harborhook is a multi-tenant, reliable webhook delivery system built with Go. Th
 - TLS certificate management and rotation procedures
 
 ### **Observability & SRE**
-- Full observability stack: Prometheus, Grafana, Loki, Tempo
-- Distributed tracing with OpenTelemetry
-- SLO-based alerting with Prometheus Alertmanager
+- Full observability stack deployed via Helm: Prometheus, Grafana, Tempo, Alertmanager (+ Loki in Docker Compose)
+- Distributed tracing with OpenTelemetry (OTLP endpoints)
+- SLO-based alerting with pre-configured Prometheus alert rules
 - Comprehensive operational runbooks for incident response
-- Performance metrics: throughput, latency percentiles, error rates
+- Performance metrics: throughput, latency percentiles, error rates, backlog depth, DLQ growth
+- Grafana datasources pre-configured for unified metrics, logs, and traces
 
 ### **DevOps & Infrastructure**
-- Kubernetes deployment with Helm charts
+- Kubernetes deployment with Helm charts including full observability stack
 - GitHub Actions CI/CD pipeline with automated E2E tests
-- Docker Compose for local development
-- Infrastructure as Code (Helm, Kubernetes manifests)
+- Docker Compose for local development with complete observability
+- Infrastructure as Code (Helm charts, Kubernetes manifests, ConfigMaps)
 - Certificate and key rotation automation
+- Multi-platform Docker images (amd64, arm64) for Apple Silicon support
 
 ### **Documentation & Operations**
 - Detailed architecture documentation with Mermaid diagrams
@@ -170,13 +172,18 @@ open http://localhost:4171  # NSQ Admin
 
 ### Observability
 
-| Component | Purpose | Port |
-|-----------|---------|------|
-| **Prometheus** | Metrics collection and querying | 9090 |
-| **Grafana** | Unified dashboards (metrics, logs, traces) | 3000 |
-| **Loki** | Log aggregation | 3100 |
-| **Tempo** | Distributed tracing | 3200 |
-| **Alertmanager** | Alert routing and deduplication | 9093 |
+**Available in both Docker Compose and Kubernetes deployments:**
+
+| Component | Purpose | Port | Status |
+|-----------|---------|------|--------|
+| **Prometheus** | Metrics collection and querying | 9090 | ✅ Enabled by default |
+| **Grafana** | Unified dashboards (metrics, logs, traces) | 3000 | ✅ Enabled by default |
+| **Tempo** | Distributed tracing (OTLP) | 3200, 4317, 4318 | ✅ Enabled by default |
+| **Alertmanager** | Alert routing and deduplication | 9093 | ✅ Enabled by default |
+| **Loki** | Log aggregation | 3100 | ⚠️ Docker Compose only* |
+| **Promtail** | Log shipping | - | ⚠️ Docker Compose only* |
+
+*Loki/Promtail disabled in Kubernetes by default (requires object storage). Can be enabled in `values.yaml`.
 
 ---
 
@@ -196,10 +203,12 @@ open http://localhost:4171  # NSQ Admin
 - **Multi-tenant isolation**: Tenant ID enforcement at API and data layers
 
 ### Observability
-- **Distributed tracing**: End-to-end request flow visualization
-- **Metrics**: Throughput, latency (p50/p95/p99), error rates, backlog depth
-- **Structured logs**: JSON logs with trace correlation
-- **Dashboards**: Pre-configured Grafana dashboards for operations
+- **Full observability stack**: Prometheus, Grafana, Tempo, Alertmanager (+ Loki/Promtail in Docker Compose)
+- **Distributed tracing**: End-to-end request flow visualization with OpenTelemetry
+- **Metrics**: Throughput, latency (p50/p95/p99), error rates, backlog depth, DLQ growth
+- **Structured logs**: JSON logs with trace correlation (via `trace_id`)
+- **Dashboards**: Pre-configured Grafana datasources for unified observability
+- **SLO-based alerting**: Pre-configured Prometheus alert rules for burn rate, latency, backlog, DLQ
 
 ### Operations
 - **Horizontal scaling**: Stateless services scale independently
@@ -367,20 +376,39 @@ docker-compose restart worker
 
 ### Access UIs
 
-**Kubernetes** (after port-forwarding):
+**Kubernetes** (requires port-forwarding):
 ```bash
+# Observability stack (enabled by default)
+kubectl port-forward svc/harborhook-prometheus-server 9090:80  # Prometheus
+kubectl port-forward svc/harborhook-grafana 3000:80            # Grafana
+kubectl port-forward svc/harborhook-alertmanager 9093:9093    # Alertmanager
+
+# Get Grafana admin password
+kubectl get secret harborhook-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+
+# NSQ Admin
 kubectl port-forward svc/harborhook-nsq-nsqadmin 4171:4171
+
+# Access URLs
+open http://localhost:9090  # Prometheus
+open http://localhost:3000  # Grafana (username: admin, password: from above)
+open http://localhost:9093  # Alertmanager
 open http://localhost:4171  # NSQ Admin
 ```
 
-**Docker Compose** (built-in):
+**Docker Compose** (direct access, no port-forwarding needed):
 ```bash
-open http://localhost:3000  # Grafana (admin/admin)
 open http://localhost:9090  # Prometheus
+open http://localhost:3000  # Grafana (admin/admin)
+open http://localhost:9093  # Alertmanager
+open http://localhost:3200  # Tempo
+open http://localhost:3100  # Loki
 open http://localhost:4171  # NSQ Admin
 ```
 
 ### Key Metrics
+
+Query these in Prometheus (http://localhost:9090) or Grafana:
 
 ```promql
 # Event publishing rate
@@ -394,11 +422,16 @@ rate(harborhook_deliveries_total{status="delivered"}[5m])
 histogram_quantile(0.95, rate(harborhook_delivery_latency_seconds_bucket[5m]))
 
 # Worker backlog depth
-harborhook_worker_backlog
+harborhook_nsq_topic_depth{topic="deliveries"}
 
 # DLQ growth rate
-rate(harborhook_dlq_total[5m])
+rate(harborhook_dlq_messages_total[1h])
+
+# Retry rate by reason
+rate(harborhook_retries_total[5m]) by (reason)
 ```
+
+**Comprehensive Setup**: See [Quickstart Guide - Step 8](docs/QUICKSTART.md#step-8-access-observability-stack-kubernetes-only) for full observability access instructions.
 
 ---
 
@@ -418,11 +451,13 @@ The project includes a full CI/CD pipeline in GitHub Actions:
 
 3. **E2E Testing**
    - Create KinD cluster
-   - Deploy with Helm using published images
+   - Deploy with Helm using published images (observability disabled for faster tests)
    - Run end-to-end tests
    - Validate full workflow
 
 **View CI Status**: [GitHub Actions](https://github.com/austindbirch/harbor_hook/actions)
+
+**Note**: The observability stack (Prometheus, Grafana, Tempo, Alertmanager) is disabled during CI E2E tests for performance, but enabled by default for manual Kubernetes deployments.
 
 ---
 

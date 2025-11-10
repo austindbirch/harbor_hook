@@ -328,57 +328,104 @@ harborctl delivery replay-dlq    # Replay failed deliveries
 
 ### Observability Stack
 
+The observability stack provides full visibility into system performance and behavior, available in both **Docker Compose** and **Kubernetes** deployments.
+
+**Deployment Notes**:
+- **Docker Compose**: Full observability stack enabled by default (Prometheus, Grafana, Loki, Tempo, Promtail, Alertmanager)
+- **Kubernetes**: Prometheus, Grafana, Tempo, and Alertmanager enabled by default via Helm chart
+  - Loki/Promtail disabled by default (requires object storage configuration)
+  - Can be enabled in `values.yaml`: `observability.loki.enabled: true`
+
 #### Prometheus (Metrics)
-- Scrapes metrics from all services
-- Stores time-series data
-- Evaluates alert rules
-- Exposes API for Grafana
+- Scrapes metrics from all Harborhook services via Kubernetes service discovery
+- Stores time-series data with 15-day retention
+- Evaluates alert rules for SLO violations and system health
+- Exposes PromQL API for Grafana queries
 
 **Key Metrics**:
-```
-harborhook_events_published_total
-harborhook_deliveries_total{status}
-harborhook_delivery_latency_seconds
-harborhook_worker_backlog
-harborhook_dlq_total
+```promql
+# Event publishing rate
+rate(harborhook_events_published_total[5m])
+
+# Delivery success rate
+rate(harborhook_deliveries_total{status="delivered"}[5m]) / rate(harborhook_deliveries_total[5m])
+
+# P95 delivery latency
+histogram_quantile(0.95, rate(harborhook_delivery_latency_seconds_bucket[5m]))
+
+# Worker backlog depth
+harborhook_nsq_topic_depth{topic="deliveries"}
+
+# DLQ growth rate
+rate(harborhook_dlq_messages_total[1h])
+
+# Retry rate by reason
+rate(harborhook_retries_total[5m]) by (reason)
 ```
 
 #### Grafana (Dashboards)
-- Unified observability UI
-- Pre-configured dashboards for:
-  - System overview (throughput, success rate)
-  - Delivery latency (p50, p95, p99)
-  - Error rates and DLQ growth
-  - Worker performance and backlog
+- Unified observability UI with pre-configured datasources
+- Access: Port 3000 (Docker), Port-forward in Kubernetes
+- Default credentials: `admin` / auto-generated password
+
+**Pre-configured Datasources**:
+- Prometheus (metrics) - Default datasource
+- Tempo (distributed traces) - Linked to Prometheus for trace-to-metric correlation
+- Loki (logs) - Docker Compose only
+
+**Dashboards** (to be added):
+- System overview (throughput, success rate, error budget)
+- Delivery latency percentiles (p50, p95, p99)
+- Error rates and DLQ growth
+- Worker performance and backlog depth
+- NSQ queue statistics
 
 #### Loki (Logs)
-- Aggregates logs from all services
-- Structured JSON logging
-- Correlated with traces via trace_id
+**Status**: Available in Docker Compose only. Disabled in Kubernetes by default.
+
+- Aggregates logs from all Harborhook containers
+- Structured JSON logging with automatic field extraction
+- Correlated with traces via `trace_id` field
 - Queried via LogQL in Grafana
+- Uses filesystem storage (Docker Compose) or requires S3/GCS/Azure (Kubernetes)
 
 #### Tempo (Traces)
-- Distributed tracing (OpenTelemetry)
-- Trace spans:
-  - `PublishEvent` → `FanOut` → `NSQPublish`
-  - `NSQConsume` → `DeliverWebhook` → `HTTPPost` → `UpdateStatus`
-- Visualize latency breakdown
+- Distributed tracing via OpenTelemetry (OTLP)
+- OTLP endpoints: gRPC `:4317`, HTTP `:4318`
+- Correlates with Prometheus metrics
+- Service mesh visualization
+
+**Trace Spans**:
+- Ingest flow: `PublishEvent` → `FanOut` → `NSQPublish`
+- Worker flow: `NSQConsume` → `DeliverWebhook` → `HTTPPost` → `UpdateStatus`
+- Visualize end-to-end latency breakdown
 
 #### Promtail (Log Shipping)
-- Ships container logs to Loki
-- Label extraction from log metadata
-- Filters and parsers for structured logs
+**Status**: Available in Docker Compose only. Disabled in Kubernetes by default.
+
+- Ships container logs from Docker daemon to Loki
+- Label extraction from Docker metadata
+- JSON log parsing for structured fields
+- Kubernetes alternative: Use native Loki log scraping or Fluentd/Fluent Bit
 
 #### Alertmanager (Alerting)
-- Receives alerts from Prometheus
-- Deduplication and grouping
-- Routing to notification channels (Slack, PagerDuty)
+- Receives alerts from Prometheus based on evaluation rules
+- Deduplication and grouping by alert type
+- Configurable routing to notification channels
+- Inhibition rules to reduce alert noise
 
-**Alert Rules**:
-- `DLQHighRate` - DLQ growth exceeds threshold
-- `NSQBacklogHigh` - Message backlog growing
-- `HighDeliveryLatency` - p95 latency above SLA
-- `CertificateExpiringSoon` - TLS cert renewal needed
+**Pre-configured Alert Rules** (in `prometheus-alert-rules-configmap.yaml`):
+- `HarborHookSLOBurnRateHigh` - Error budget burn rate critically high
+- `HarborHookBacklogHigh` / `BacklogCritical` - NSQ queue depth exceeding thresholds
+- `HarborHookLatencyHigh` / `LatencyCritical` - P99 delivery latency above SLO
+- `HarborHookSuccessRateLow` - Success rate below 99.9% SLO
+- `HarborHookServiceDown` - Service availability issues
+- `HarborHookDLQGrowth` - DLQ message accumulation
+- `HarborHookEndpointDown` - Customer endpoint returning 5xx errors
+
+**Access**:
+- Docker Compose: `http://localhost:9093`
+- Kubernetes: Port-forward to service `harborhook-alertmanager:9093`
 
 ## Data Flow
 
