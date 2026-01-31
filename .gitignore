@@ -18,6 +18,10 @@ deploy/docker/tempo/data/
 deploy/docker/loki/data/
 deploy/docker/alertmanager/data/
 
+# Helm
+charts/*/charts/
+charts/**/Chart.lock
+
 # Claude
 .claude/
 CLAUDE.md
