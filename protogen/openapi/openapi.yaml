@@ -1,0 +1,482 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.0
+info:
+    title: HarborHook
+    description: A Go-first multi-tenant webhook platform
+    contact:
+        name: Austin Birch
+        email: austin@argus-entertainment.com
+    version: 1.0.0
+paths:
+    /v1/deliveries/{delivery_id}:replay:
+        post:
+            tags:
+                - WebhookService
+                - Deliveries
+            description: Replay a specific delivery attempt
+            operationId: WebhookService_ReplayDelivery
+            parameters:
+                - name: delivery_id
+                  in: path
+                  description: The ID of the delivery to replay
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplayDeliveryRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReplayDeliveryResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/dlq:
+        get:
+            tags:
+                - WebhookService
+                - Deliveries
+            description: List all deliveries in the dead letter queue
+            operationId: WebhookService_ListDLQ
+            parameters:
+                - name: endpoint_id
+                  in: query
+                  description: ID of the endpoint to filter by
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  description: Limit the number of results (default 10)
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListDLQResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/events/{event_id}/deliveries:
+        get:
+            tags:
+                - WebhookService
+                - Events
+            description: Get the delivery status of a specific event
+            operationId: WebhookService_GetDeliveryStatus
+            parameters:
+                - name: event_id
+                  in: path
+                  description: ID of the event to check deliveries for
+                  required: true
+                  schema:
+                    type: string
+                - name: endpoint_id
+                  in: query
+                  description: ID of the endpoint to check deliveries for
+                  schema:
+                    type: string
+                - name: from
+                  in: query
+                  description: Start datetime to search
+                  schema:
+                    type: string
+                    format: date-time
+                - name: to
+                  in: query
+                  description: End datetime to search
+                  schema:
+                    type: string
+                    format: date-time
+                - name: limit
+                  in: query
+                  description: Limit the number of results (default 10)
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetDeliveryStatusResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/ping:
+        get:
+            tags:
+                - WebhookService
+            description: Placeholder to verify gateway wiring in later phases.
+            operationId: WebhookService_Ping
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PingResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tenants/{tenant_id}/endpoints:
+        post:
+            tags:
+                - WebhookService
+                - Endpoints
+            description: Register a new URL as a webhook endpoint
+            operationId: WebhookService_CreateEndpoint
+            parameters:
+                - name: tenant_id
+                  in: path
+                  description: ID for the tenant
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateEndpointRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateEndpointResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tenants/{tenant_id}/events:publish:
+        post:
+            tags:
+                - WebhookService
+                - Events
+            description: Publish a new webhook event
+            operationId: WebhookService_PublishEvent
+            parameters:
+                - name: tenant_id
+                  in: path
+                  description: ID for the tenant
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PublishEventRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PublishEventResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/tenants/{tenant_id}/subscriptions:
+        post:
+            tags:
+                - WebhookService
+                - Subscriptions
+            description: Subscribe an endpoint to a specific event type
+            operationId: WebhookService_CreateSubscription
+            parameters:
+                - name: tenant_id
+                  in: path
+                  description: Tenant ID for the subscription
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateSubscriptionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateSubscriptionResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+components:
+    schemas:
+        CreateEndpointRequest:
+            type: object
+            properties:
+                tenant_id:
+                    type: string
+                    description: ID for the tenant
+                url:
+                    type: string
+                    description: Target URL that we will send events to, e.g. http://fake-receiver:8081/hook
+                secret:
+                    type: string
+                    description: Optional secret. If empty, server generates a secret for you
+            description: Create endpoint request message
+        CreateEndpointResponse:
+            type: object
+            properties:
+                endpoint:
+                    allOf:
+                        - $ref: '#/components/schemas/Endpoint'
+                    description: The newly created endpoint
+            description: Create endpoint response message
+        CreateSubscriptionRequest:
+            type: object
+            properties:
+                tenant_id:
+                    type: string
+                    description: Tenant ID for the subscription
+                event_type:
+                    type: string
+                    description: Event type that this subscription is for
+                endpoint_id:
+                    type: string
+                    description: Endpoint ID that this subscription is a member of
+            description: Create subscription request message
+        CreateSubscriptionResponse:
+            type: object
+            properties:
+                subscription:
+                    allOf:
+                        - $ref: '#/components/schemas/Subscription'
+                    description: The newly created subscription
+            description: Create subscription response message
+        DeliveryAttempt:
+            type: object
+            properties:
+                delivery_id:
+                    type: string
+                    description: Unique ID for the delivery attempt
+                event_id:
+                    type: string
+                    description: ID of the event being delivered
+                endpoint_id:
+                    type: string
+                    description: ID of the endpoint being delivered to
+                replay_of:
+                    type: string
+                    description: link to source attempt (if replayed)
+                status:
+                    enum:
+                        - DELIVERY_ATTEMPT_STATUS_UNSPECIFIED
+                        - DELIVERY_ATTEMPT_STATUS_QUEUED
+                        - DELIVERY_ATTEMPT_STATUS_IN_FLIGHT
+                        - DELIVERY_ATTEMPT_STATUS_DELIVERED
+                        - DELIVERY_ATTEMPT_STATUS_FAILED
+                        - DELIVERY_ATTEMPT_STATUS_DEAD_LETTERED
+                    type: string
+                    description: queued|inflight|delivered|failed|dead
+                    format: enum
+                http_status:
+                    type: integer
+                    description: HTTP status code
+                    format: int32
+                error_reason:
+                    type: string
+                    description: Optional error reason
+                enqueued_at:
+                    type: string
+                    description: Timestamp of when the delivery was enqueued
+                    format: date-time
+                dequeued_at:
+                    type: string
+                    description: Timestamp of when the delivery was dequeued
+                    format: date-time
+                sent_at:
+                    type: string
+                    description: Timestamp of when the delivery was sent
+                    format: date-time
+                delivered_at:
+                    type: string
+                    description: Timestamp of when the delivery was delivered
+                    format: date-time
+                failed_at:
+                    type: string
+                    description: Timestamp of when the delivery failed
+                    format: date-time
+                dlq_at:
+                    type: string
+                    description: Timestamp of when the delivery was dead-lettered
+                    format: date-time
+        Endpoint:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: Unique ID for the endpoint
+                tenant_id:
+                    type: string
+                    description: ID for the tenant
+                url:
+                    type: string
+                    description: Target URL that we will send events to
+                created_at:
+                    type: string
+                    description: Created at timestamp (must be after 2025-01-01 00:00:00 UTC)
+                    format: date-time
+            description: An endpoint is a URL that receives webhook events
+        GetDeliveryStatusResponse:
+            type: object
+            properties:
+                attempts:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/DeliveryAttempt'
+                    description: List of delivery attempts
+        GoogleProtobufAny:
+            type: object
+            properties:
+                '@type':
+                    type: string
+                    description: The type of the serialized message.
+            additionalProperties: true
+            description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        ListDLQResponse:
+            type: object
+            properties:
+                dead:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/DeliveryAttempt'
+                    description: List of delivery attempts in the DLQ
+        PingResponse:
+            type: object
+            properties:
+                message:
+                    type: string
+        PublishEventRequest:
+            type: object
+            properties:
+                tenant_id:
+                    type: string
+                    description: ID for the tenant
+                event_type:
+                    type: string
+                    description: Event type to be published
+                payload:
+                    type: object
+                    description: Payload data for the event (arbitrary JSON)
+                idempotency_key:
+                    type: string
+                    description: Required for deduplication, if empty, no dedup
+            description: Publish event request message
+        PublishEventResponse:
+            type: object
+            properties:
+                event_id:
+                    type: string
+                    description: Event ID
+                fanout_count:
+                    type: integer
+                    description: How many deliveries for this event are enqueued
+                    format: int32
+            description: Publish event response message
+        ReplayDeliveryRequest:
+            type: object
+            properties:
+                delivery_id:
+                    type: string
+                    description: The ID of the delivery to replay
+                reason:
+                    type: string
+                    description: Optional reason for replaying the delivery
+        ReplayDeliveryResponse:
+            type: object
+            properties:
+                new_attempt:
+                    allOf:
+                        - $ref: '#/components/schemas/DeliveryAttempt'
+                    description: The newly enqueued attempt
+        Status:
+            type: object
+            properties:
+                code:
+                    type: integer
+                    description: The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
+                    format: int32
+                message:
+                    type: string
+                    description: A developer-facing error message, which should be in English. Any user-facing error message should be localized and sent in the [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
+                details:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/GoogleProtobufAny'
+                    description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
+            description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        Subscription:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: Unique ID for the subscription
+                tenant_id:
+                    type: string
+                    description: ID for the tenant
+                event_type:
+                    type: string
+                    description: Event type that this subscription is for
+                endpoint_id:
+                    type: string
+                    description: Endpoint ID that this subscription is a member of
+                created_at:
+                    type: string
+                    description: Created at timestamp (must be after 2025-01-01 00:00:00 UTC)
+                    format: date-time
+            description: A subscription is a relationship between an endpoint and an event type
+tags:
+    - name: Deliveries
+      description: Get data about webhook deliveries
+    - name: Endpoints
+      description: Get data about webhook endpoints
+    - name: Events
+      description: Get data about webhook events
+    - name: Subscriptions
+      description: Get data about webhook subscriptions
+    - name: WebhookService
+      description: Main service definition. If you're viewing on Swagger/Redoc, this tag contains all paths available.

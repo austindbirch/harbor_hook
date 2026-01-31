@@ -20,47 +20,6 @@ jobs:
           go-version: '1.24'
           cache: true
 
-      - name: Set up buf
-        uses: bufbuild/buf-action@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          setup_only: true
-
-      - name: Cache proto tools
-        id: cache-proto-tools
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin
-          key: ${{ runner.os }}-proto-tools-${{ hashFiles('**/go.mod') }}
-          restore-keys: |
-            ${{ runner.os }}-proto-tools-
-        
-      - name: Set up proto tools
-        if: steps.cache-proto-tools.outputs.cache-hit != 'true'
-        run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
-          go install github.com/google/gnostic/cmd/protoc-gen-openapi@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
-      - name: Generate protobufs
-        run: make proto
-
-      - name: Upload protobufs
-        uses: actions/upload-artifact@v4
-        with:
-          name: protogen
-          path: protogen/
-
-      - name: Cache protobufs
-        uses: actions/cache@v3
-        with:
-          path: protogen/
-          key: ${{ runner.os }}-protogen-${{ hashFiles('proto/**/*/.proto') }}
-          restore-keys: |
-            ${{ runner.os }}-protogen-
-
       - name: Build
         run: make build
 
@@ -81,12 +40,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Download protobufs
-        uses: actions/download-artifact@v4
-        with:
-          name: protogen
-          path: protogen/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
