@@ -6,7 +6,9 @@ Harborhook is a multi-tenant, reliable webhook delivery system built with Go. Th
 
 **Status**: ⚠️ This is a demonstration project, not production-ready software. Built for learning and showcasing technical skills.
 
-[![CI](https://github.com/austindbirch/harbor_hook/actions/workflows/ci.yaml/badge.svg)](https://github.com/austindbirch/harbor_hook/actions/workflows/ci.yaml)
+[![CICD](https://github.com/austindbirch/harbor_hook/actions/workflows/ci.yaml/badge.svg)](https://github.com/austindbirch/harbor_hook/actions/workflows/ci.yaml)
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/austindbirch/harbor_hook)](https://goreportcard.com/report/github.com/austindbirch/harbor_hook)
 
 ---
 
@@ -52,7 +54,7 @@ Harborhook is a multi-tenant, reliable webhook delivery system built with Go. Th
 ## TODO
 - [x] Add MIT license
 - [x] Remove .editorconfig
-- [ ] Remove helm dependncies from repo, but keep in builds
+- [x] Remove helm dependncies from repo, but keep in builds
 - [x] Commit protogen (remove code gen from CICD, and add a makefile entry for codegen)
 - [ ] Setup cicd so it also builds on branches, so that tests and basic validations run without pushes to main
 - [ ] Move JWT validation out of Envoy
