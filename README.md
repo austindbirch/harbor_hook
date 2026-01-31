@@ -49,6 +49,18 @@ Harborhook is a multi-tenant, reliable webhook delivery system built with Go. Th
 
 ---
 
+## TODO
+- [x] Add MIT license
+- [ ] Remove .editorconfig
+- [ ] Remove helm dependncies from repo, but keep in builds
+- [ ] Commit protogen (remove code gen from CICD, and add a makefile entry for codegen)
+- [ ] Setup cicd so it also builds on branches, so that tests and basic validations run without pushes to main
+- [ ] Move JWT validation out of Envoy
+- [ ] Generate a docs site and host on Github pages (check out [hugo](https://gohugo.io/))
+- [ ] Write a frontend (support multiple users, configurability, start with a demo account for quickstart)
+
+---
+
 ## Architecture Overview
 
 ```mermaid
@@ -81,7 +93,7 @@ graph LR
 - DLQ for exhausted deliveries
 - Real-time delivery status tracking
 
-📖 **[Full Architecture Documentation →](docs/architecture.md)**
+**[Full Architecture Documentation →](docs/architecture.md)**
 
 ---
 
