@@ -1,0 +1,10 @@
+# Hugo build artifacts
+public/
+resources/
+.hugo_build.lock
+
+# Theme (downloaded during CICD build)
+themes/
+
+# OS files
+.DS_Store

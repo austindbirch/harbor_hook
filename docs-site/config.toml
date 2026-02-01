@@ -1,0 +1,65 @@
+baseURL = "https://austindbirch.github.io/harbor_hook/"
+title = "Harborhook Documentation"
+theme = "hugo-geekdoc"
+
+pluralizeListTitles = false
+pygmentsUseClasses = true
+pygmentsCodeFences = true
+disablePathToLower = true
+
+# Language and content
+languageCode = "en-us"
+defaultContentLanguage = "en"
+enableGitInfo = true
+
+# Markup configuration
+[markup]
+  [markup.goldmark.renderer]
+    unsafe = true  # Allow HTML in markdown
+  [markup.highlight]
+    style = "monokai"
+    lineNos = true
+  [markup.tableOfContents]
+    startLevel = 1
+    endLevel = 9
+
+# Enable Mermaid diagrams
+[params]
+  geekdocRepo = "https://github.com/austindbirch/harbor_hook"
+  geekdocEditPath = "edit/main/docs"
+  geekdocSearch = true
+  geekdocDarkMode = true
+  geekdocAnchor = true
+  geekdocToC = 3
+  geekdocTagsToMenu = true
+
+# Content mounts - reference existing docs
+[module]
+  [[module.mounts]]
+    source = "../docs"
+    target = "content/docs"
+  [[module.mounts]]
+    source = "content"
+    target = "content"
+  [[module.mounts]]
+    source = "static"
+    target = "static"
+
+# Menu configuration
+[menu]
+  [[menu.main]]
+    name = "Architecture"
+    url = "/docs/architecture/"
+    weight = 10
+  [[menu.main]]
+    name = "Quick Start"
+    url = "/docs/quickstart/"
+    weight = 20
+  [[menu.main]]
+    name = "Runbooks"
+    url = "/docs/runbooks/"
+    weight = 30
+  [[menu.main]]
+    name = "GitHub"
+    url = "https://github.com/austindbirch/harbor_hook"
+    weight = 40
