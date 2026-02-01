@@ -25,3 +25,6 @@ charts/**/Chart.lock
 # Claude
 .claude/
 CLAUDE.md
+
+# Docs
+docs/plans

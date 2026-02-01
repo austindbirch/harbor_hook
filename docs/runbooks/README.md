@@ -1,3 +1,8 @@
+---
+title: "Operational Runbooks"
+weight: 20
+---
+
 # Harborhook Operational Runbooks
 
 This directory contains operational runbooks for managing and troubleshooting Harborhook in production.

@@ -1,3 +1,8 @@
+---
+title: "Harborctl CLI"
+weight: 30
+---
+
 # Harborhook CLI (harborctl) - Implementation Summary
 
 ## Core CLI Structure (`cmd/harborctl/`)
@@ -16,40 +21,40 @@
    - `completion.go` - Shell autocompletion
    - `quick.go` - Quick workflow commands
 
-## Key Features Implemented
+## Features
 
 ### 1. **Complete API Coverage**
-- ✅ `PublishEvent` - Publish webhook events with JSON payload
-- ✅ `GetDeliveryStatus` - Check delivery status with filtering options
-- ✅ `ReplayDelivery` - Replay failed deliveries with reason tracking
-- ✅ `ListDLQ` - List dead letter queue entries
-- ✅ `CreateEndpoint` - Create webhook endpoints with optional secrets
-- ✅ `CreateSubscription` - Create event type subscriptions
-- ✅ `Ping` - Service connectivity verification
+- `PublishEvent` - Publish webhook events with JSON payload
+- `GetDeliveryStatus` - Check delivery status with filtering options
+- `ReplayDelivery` - Replay failed deliveries with reason tracking
+- `ListDLQ` - List dead letter queue entries
+- `CreateEndpoint` - Create webhook endpoints with optional secrets
+- `CreateSubscription` - Create event type subscriptions
+- `Ping` - Service connectivity verification
 
 ### 2. **Additional Useful Commands**
-- ✅ Health checking with fallback to ping
-- ✅ Version information with build metadata
-- ✅ Configuration management (init, view, set)
-- ✅ Shell completion for bash/zsh/fish/powershell
-- ✅ Quick setup workflows (endpoint + subscription in one command)
-- ✅ Quick test workflows (publish test event and check status)
+- Health checking with fallback to ping
+- Version information with build metadata
+- Configuration management (init, view, set)
+- Shell completion for bash/zsh/fish/powershell
+- Quick setup workflows (endpoint + subscription in one command)
+- Quick test workflows (publish test event and check status)
 
 ### 3. **Professional CLI Features**
-- ✅ Both gRPC and HTTP client support
-- ✅ JSON and human-readable output formats
-- ✅ Configuration file support (`~/.harborctl.yaml`)
-- ✅ Comprehensive help system
-- ✅ Proper error handling and exit codes
-- ✅ Request timeouts and server configuration
-- ✅ Shell autocompletion support
+- Both gRPC and HTTP client support
+- JSON and human-readable output formats
+- Configuration file support (`~/.harborctl.yaml`)
+- Comprehensive help system
+- Proper error handling and exit codes
+- Request timeouts and server configuration
+- Shell autocompletion support
 
 ### 4. **Operational Tools**
-- ✅ Demo script (`scripts/harborctl/demo.sh`)
-- ✅ Monitoring script (`scripts/harborctl/monitor.sh`)
-- ✅ Bulk DLQ replay script (`scripts/harborctl/replay-dlq.sh`)
-- ✅ Docker support with Dockerfile
-- ✅ Makefile integration for building and installation
+- Demo script (`scripts/harborctl/demo.sh`)
+- Monitoring script (`scripts/harborctl/monitor.sh`)
+- Bulk DLQ replay script (`scripts/harborctl/replay-dlq.sh`)
+- Docker support with Dockerfile
+- Makefile integration for building and installation
 
 ## Command Examples
 

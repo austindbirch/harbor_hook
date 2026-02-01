@@ -7,6 +7,14 @@ pygmentsUseClasses = true
 pygmentsCodeFences = true
 disablePathToLower = true
 
+# Ignore internal docs not meant for public site
+ignoreFiles = [
+  "prd/",
+  "implementation_plan/",
+  "plans/",
+  "2026-01-31-hugo-docs-site\\.md"
+]
+
 # Language and content
 languageCode = "en-us"
 defaultContentLanguage = "en"
@@ -36,8 +44,23 @@ enableGitInfo = true
 # Content mounts - reference existing docs
 [module]
   [[module.mounts]]
-    source = "../docs"
-    target = "content/docs"
+    source = "../docs/architecture.md"
+    target = "content/docs/architecture.md"
+  [[module.mounts]]
+    source = "../docs/QUICKSTART.md"
+    target = "content/docs/quickstart.md"
+  [[module.mounts]]
+    source = "../docs/harborctl.md"
+    target = "content/docs/harborctl.md"
+  [[module.mounts]]
+    source = "../docs/signature_verification.md"
+    target = "content/docs/signature_verification.md"
+  [[module.mounts]]
+    source = "../docs/glossary.md"
+    target = "content/docs/glossary.md"
+  [[module.mounts]]
+    source = "../docs/runbooks"
+    target = "content/docs/runbooks"
   [[module.mounts]]
     source = "content"
     target = "content"

@@ -1,3 +1,8 @@
+---
+title: "JWT Key Rotation"
+weight: 40
+---
+
 # Runbook: JWT Key Rotation
 
 ## Overview

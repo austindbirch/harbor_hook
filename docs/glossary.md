@@ -1,3 +1,8 @@
+---
+title: "Glossary"
+weight: 50
+---
+
 # HarborHook Glossary
 
 A comprehensive dictionary of terms, concepts, and components used in the HarborHook webhooks platform.

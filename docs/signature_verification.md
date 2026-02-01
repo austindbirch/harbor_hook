@@ -1,3 +1,8 @@
+---
+title: "Signature Verification"
+weight: 40
+---
+
 # Webhook Signature Verification Guide
 
 ## Overview

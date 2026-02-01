@@ -1,3 +1,8 @@
+---
+title: "Certificate Rotation"
+weight: 50
+---
+
 # Runbook: TLS Certificate Rotation
 
 ## Overview

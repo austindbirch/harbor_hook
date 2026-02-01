@@ -1,3 +1,8 @@
+---
+title: "Quickstart Guide"
+weight: 5
+---
+
 # Harborhook Quickstart Guide
 
 This guide will help you get Harborhook running in under 10 minutes and deliver your first webhook.

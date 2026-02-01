@@ -1,3 +1,8 @@
+---
+title: "Architecture"
+weight: 10
+---
+
 # Harborhook Architecture
 
 ## Overview
